@@ -1,31 +1,67 @@
-﻿import asyncio
+"""AstrBot ??????????"""
+
+import asyncio
 from functools import wraps
 from pathlib import Path
-from astrbot.api import logger, AstrBotConfig
-from astrbot.api.star import Context, Star, StarTools
+
+from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, filter
-from .data import DataBase, MigrationManager
+from astrbot.api.star import Context, Star, StarTools
+
 from .config_manager import ConfigManager
+from .data import DataBase, MigrationManager
 from .handlers import (
-    MiscHandler, PlayerHandler, EquipmentHandler, BreakthroughHandler, 
-    PillHandler, ShopHandler, StorageRingHandler,
-    SectHandlers, BossHandlers, CombatHandlers, RankingHandlers,
-    RiftHandlers, AdventureHandlers, AlchemyHandlers, ImpartHandlers,
-    NicknameHandler, BankHandlers, BountyHandlers, ImpartPkHandlers,
-    BlessedLandHandlers, SpiritFarmHandlers, DualCultivationHandlers, SpiritEyeHandlers,
-    BlackMarketHandler, EnlightenmentHandlers, FortuneHandlers
+    AdventureHandlers,
+    AlchemyHandlers,
+    BankHandlers,
+    BlackMarketHandler,
+    BlessedLandHandlers,
+    BossHandlers,
+    BountyHandlers,
+    BreakthroughHandler,
+    CombatHandlers,
+    DualCultivationHandlers,
+    EnlightenmentHandlers,
+    EquipmentHandler,
+    FortuneHandlers,
+    ImpartHandlers,
+    ImpartPkHandlers,
+    MiscHandler,
+    NicknameHandler,
+    PillHandler,
+    PlayerHandler,
+    RankingHandlers,
+    RiftHandlers,
+    SectHandlers,
+    ShopHandler,
+    SpiritEyeHandlers,
+    SpiritFarmHandlers,
+    StorageRingHandler,
 )
 from .managers import (
-    CombatManager, SectManager, BossManager, RiftManager, 
-    RankingManager, AdventureManager, AlchemyManager, ImpartManager,
-    BankManager, BountyManager, ImpartPkManager,
-    BlessedLandManager, SpiritFarmManager, DualCultivationManager, SpiritEyeManager,
-    EnlightenmentManager, FortuneManager
+    AdventureManager,
+    AlchemyManager,
+    BankManager,
+    BlessedLandManager,
+    BossManager,
+    BountyManager,
+    CombatManager,
+    DualCultivationManager,
+    EnlightenmentManager,
+    FortuneManager,
+    ImpartManager,
+    ImpartPkManager,
+    RankingManager,
+    RiftManager,
+    SectManager,
+    SpiritEyeManager,
+    SpiritFarmManager,
 )
 
 
 def require_whitelist(func):
-    """装饰器：检查群聊白名单权限"""
+    """??????????????"""
+
     @wraps(func)
     async def wrapper(self, event: AstrMessageEvent, *args, **kwargs):
         if not self._check_access(event):
@@ -33,142 +69,145 @@ def require_whitelist(func):
             return
         async for result in func(self, event, *args, **kwargs):
             yield result
+
     return wrapper
 
-# 指令定义
-CMD_HELP = "修仙帮助"
-CMD_START_XIUXIAN = "我要修仙"
-CMD_PLAYER_INFO = "我的信息"
-CMD_START_CULTIVATION = "闭关"
-CMD_END_CULTIVATION = "出关"
-CMD_CHECK_IN = "签到"
-CMD_SHOW_EQUIPMENT = "我的装备"
-CMD_EQUIP_ITEM = "装备"
-CMD_UNEQUIP_ITEM = "卸下"
-CMD_BREAKTHROUGH = "突破"
-CMD_BREAKTHROUGH_INFO = "突破信息"
-CMD_USE_PILL = "服用丹药"
-CMD_SHOW_PILLS = "丹药背包"
-CMD_PILL_INFO = "丹药信息"
-CMD_PILL_PAVILION = "丹阁"
-CMD_WEAPON_PAVILION = "器阁"
-CMD_TREASURE_PAVILION = "百宝阁"
-CMD_ITEM_INFO = "物品信息"
-CMD_BUY = "购买"
-CMD_STORAGE_RING = "储物戒"
-CMD_RETRIEVE_ITEM = "丢弃"
-CMD_UPGRADE_RING = "更换储物戒"
-CMD_DISCARD_ITEM = "销毁"
-CMD_GIFT_ITEM = "赠予"
-CMD_ACCEPT_GIFT = "接收"
-CMD_REJECT_GIFT = "拒绝"
-CMD_SEARCH_ITEM = "搜索物品"
-CMD_RETRIEVE_ALL = "丢弃所有"
 
-# 宗门系统指令
-CMD_CREATE_SECT = "创建宗门"
-CMD_JOIN_SECT = "加入宗门"
-CMD_LEAVE_SECT = "退出宗门"
-CMD_MY_SECT = "我的宗门"
-CMD_SECT_LIST = "宗门列表"
-CMD_SECT_DONATE = "宗门捐献"
-CMD_SECT_KICK = "踢出成员"
-CMD_SECT_TRANSFER = "宗主传位"
-CMD_SECT_TASK = "宗门任务"
-CMD_SECT_POSITION = "职位变更"
+# ===== ???? =====
+CMD_HELP = "????"
+CMD_START_XIUXIAN = "????"
+CMD_PLAYER_INFO = "????"
+CMD_START_CULTIVATION = "??"
+CMD_END_CULTIVATION = "??"
+CMD_CHECK_IN = "??"
+CMD_SHOW_EQUIPMENT = "????"
+CMD_EQUIP_ITEM = "??"
+CMD_UNEQUIP_ITEM = "??"
+CMD_BREAKTHROUGH = "??"
+CMD_BREAKTHROUGH_INFO = "????"
+CMD_USE_PILL = "????"
+CMD_SHOW_PILLS = "????"
+CMD_PILL_INFO = "????"
+CMD_PILL_PAVILION = "??"
+CMD_WEAPON_PAVILION = "??"
+CMD_TREASURE_PAVILION = "???"
+CMD_ITEM_INFO = "????"
+CMD_BUY = "??"
+CMD_STORAGE_RING = "???"
+CMD_RETRIEVE_ITEM = "??"
+CMD_UPGRADE_RING = "?????"
+CMD_DISCARD_ITEM = "??"
+CMD_GIFT_ITEM = "??"
+CMD_ACCEPT_GIFT = "??"
+CMD_REJECT_GIFT = "??"
+CMD_SEARCH_ITEM = "????"
+CMD_RETRIEVE_ALL = "????"
 
-# Boss系统指令
-CMD_BOSS_INFO = "世界Boss"
-CMD_BOSS_FIGHT = "挑战Boss"
-CMD_SPAWN_BOSS = "生成Boss"
+# ===== ???? =====
+CMD_CREATE_SECT = "????"
+CMD_JOIN_SECT = "????"
+CMD_LEAVE_SECT = "????"
+CMD_MY_SECT = "????"
+CMD_SECT_LIST = "????"
+CMD_SECT_DONATE = "????"
+CMD_SECT_KICK = "????"
+CMD_SECT_TRANSFER = "????"
+CMD_SECT_TASK = "????"
+CMD_SECT_POSITION = "????"
 
-# 排行榜指令
-CMD_RANK_LEVEL = "境界排行"
-CMD_RANK_POWER = "战力排行"
-CMD_RANK_WEALTH = "灵石排行"
-CMD_RANK_SECT = "宗门排行"
-CMD_RANK_DEPOSIT = "存款排行"
-CMD_RANK_CONTRIBUTION = "贡献排行"
+# ===== Boss ?? =====
+CMD_BOSS_INFO = "??Boss"
+CMD_BOSS_FIGHT = "??Boss"
+CMD_SPAWN_BOSS = "??Boss"
 
-# 战斗指令
-CMD_DUEL = "决斗"
-CMD_SPAR = "切磋"
+# ===== ????? =====
+CMD_RANK_LEVEL = "????"
+CMD_RANK_POWER = "????"
+CMD_RANK_WEALTH = "????"
+CMD_RANK_SECT = "????"
+CMD_RANK_DEPOSIT = "????"
+CMD_RANK_CONTRIBUTION = "????"
 
-# 秘境系统指令
-CMD_RIFT_LIST = "秘境列表"
-CMD_RIFT_EXPLORE = "探索秘境"
-CMD_RIFT_COMPLETE = "完成探索"
-CMD_RIFT_EXIT = "退出秘境"
+# ===== ???? =====
+CMD_DUEL = "??"
+CMD_SPAR = "??"
 
-# 历练系统指令
-CMD_ADVENTURE_START = "开始历练"
-CMD_ADVENTURE_COMPLETE = "完成历练"
-CMD_ADVENTURE_STATUS = "历练状态"
-CMD_ADVENTURE_INFO = "历练信息"
+# ===== ???? =====
+CMD_RIFT_LIST = "????"
+CMD_RIFT_EXPLORE = "????"
+CMD_RIFT_COMPLETE = "????"
+CMD_RIFT_EXIT = "????"
 
-# 炼丹系统指令
-CMD_ALCHEMY_RECIPES = "丹药配方"
-CMD_ALCHEMY_CRAFT = "炼丹"
+# ===== ???? =====
+CMD_ADVENTURE_START = "????"
+CMD_ADVENTURE_COMPLETE = "????"
+CMD_ADVENTURE_STATUS = "????"
+CMD_ADVENTURE_INFO = "????"
 
-# 传承系统指令
-CMD_IMPART_INFO = "传承信息"
+# ===== ???? =====
+CMD_ALCHEMY_RECIPES = "????"
+CMD_ALCHEMY_CRAFT = "??"
 
-# Phase 1: 道号系统
-CMD_CHANGE_NICKNAME = "改道号"
+# ===== ???? =====
+CMD_IMPART_INFO = "????"
 
-# Phase 2: 灵石银行
-CMD_BANK_INFO = "银行"
-CMD_BANK_DEPOSIT = "存灵石"
-CMD_BANK_WITHDRAW = "取灵石"
-CMD_BANK_INTEREST = "领取利息"
-CMD_BANK_LOAN = "贷款"
-CMD_BANK_REPAY = "还款"
-CMD_BANK_TRANSACTIONS = "银行流水"
-CMD_BANK_BREAKTHROUGH_LOAN = "突破贷款"
+# ===== ?????? =====
+CMD_CHANGE_NICKNAME = "???"
+CMD_REBIRTH = "????"
+CMD_REROLL_ROOT = "????"
+CMD_ENLIGHTENMENT_INFO = "????"
+CMD_FORTUNE_INFO = "????"
+CMD_CLAIM_FORTUNE = "???"
 
-# Phase 2: 悬赏令
-CMD_BOUNTY_LIST = "悬赏令"
-CMD_BOUNTY_ACCEPT = "接取悬赏"
-CMD_BOUNTY_STATUS = "悬赏状态"
-CMD_BOUNTY_COMPLETE = "完成悬赏"
-CMD_BOUNTY_ABANDON = "放弃悬赏"
+# ===== ??????? =====
+CMD_BANK_INFO = "??"
+CMD_BANK_DEPOSIT = "???"
+CMD_BANK_WITHDRAW = "???"
+CMD_BANK_INTEREST = "????"
+CMD_BANK_LOAN = "??"
+CMD_BANK_REPAY = "??"
+CMD_BANK_TRANSACTIONS = "????"
+CMD_BANK_BREAKTHROUGH_LOAN = "????"
+CMD_BLACK_MARKET = "??"
+CMD_BLACK_MARKET_BUY = "????"
 
-# Phase 3: 传承PK
-CMD_IMPART_CHALLENGE = "传承挑战"
-CMD_IMPART_RANKING = "传承排行"
+# ===== ???? =====
+CMD_BOUNTY_LIST = "???"
+CMD_BOUNTY_ACCEPT = "????"
+CMD_BOUNTY_STATUS = "????"
+CMD_BOUNTY_COMPLETE = "????"
+CMD_BOUNTY_ABANDON = "????"
 
-# Phase 4: 洞天福地
-CMD_BLESSED_LAND_INFO = "我的洞天"
-CMD_BLESSED_LAND_BUY = "购买洞天"
-CMD_BLESSED_LAND_REPLACE = "置换洞天"
-CMD_BLESSED_LAND_UPGRADE = "升级洞天"
-CMD_BLESSED_LAND_COLLECT = "洞天收取"
+# ===== ?????? =====
+CMD_IMPART_CHALLENGE = "????"
+CMD_IMPART_RANKING = "????"
 
-# Phase 4: 灵田
-CMD_SPIRIT_FARM_INFO = "我的灵田"
-CMD_SPIRIT_FARM_CREATE = "开垦灵田"
-CMD_SPIRIT_FARM_PLANT = "种植"
-CMD_SPIRIT_FARM_HARVEST = "收获"
-CMD_SPIRIT_FARM_UPGRADE = "升级灵田"
+# ===== ???? =====
+CMD_BLESSED_LAND_INFO = "????"
+CMD_BLESSED_LAND_BUY = "????"
+CMD_BLESSED_LAND_REPLACE = "????"
+CMD_BLESSED_LAND_UPGRADE = "????"
+CMD_BLESSED_LAND_COLLECT = "????"
 
-# Phase 4: 双修
-CMD_DUAL_CULT_REQUEST = "双修"
-CMD_DUAL_CULT_ACCEPT = "接受双修"
-CMD_DUAL_CULT_REJECT = "拒绝双修"
+# ===== ???? =====
+CMD_SPIRIT_FARM_INFO = "????"
+CMD_SPIRIT_FARM_CREATE = "????"
+CMD_SPIRIT_FARM_PLANT = "??"
+CMD_SPIRIT_FARM_HARVEST = "??"
+CMD_SPIRIT_FARM_UPGRADE = "????"
 
-# Phase 4: 灵眼
-CMD_SPIRIT_EYE_INFO = "灵眼信息"
-CMD_SPIRIT_EYE_CLAIM = "抢占灵眼"
-CMD_SPIRIT_EYE_COLLECT = "灵眼收取"
-CMD_SPIRIT_EYE_RELEASE = "释放灵眼"
+# ===== ???? =====
+CMD_DUAL_CULT_REQUEST = "??"
+CMD_DUAL_CULT_ACCEPT = "????"
+CMD_DUAL_CULT_REJECT = "????"
 
-CMD_REBIRTH = "弃道重修"
-CMD_REROLL_ROOT = "逆天改命"
-CMD_BLACK_MARKET = "黑市"
-CMD_BLACK_MARKET_BUY = "黑市购买"
-CMD_ENLIGHTENMENT_INFO = "悟道信息"
-CMD_FORTUNE_INFO = "福缘信息"
-CMD_CLAIM_FORTUNE = "求福缘"
+# ===== ???? =====
+CMD_SPIRIT_EYE_INFO = "????"
+CMD_SPIRIT_EYE_CLAIM = "????"
+CMD_SPIRIT_EYE_COLLECT = "????"
+CMD_SPIRIT_EYE_RELEASE = "????"
+
+
 class XiuXianPlugin(Star):
     """修仙插件 - 文字修仙游戏"""
 

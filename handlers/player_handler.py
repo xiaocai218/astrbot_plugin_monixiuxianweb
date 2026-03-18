@@ -1,4 +1,5 @@
-# handlers/player_handler.py
+"""玩家基础信息与修炼相关处理器。"""
+
 import random
 import time
 from datetime import datetime
@@ -26,7 +27,7 @@ __all__ = ["PlayerHandler"]
 
 
 class PlayerHandler:
-    """玩家基础信息处理器。"""
+    """处理建号、信息、闭关、签到与重修。"""
 
     def __init__(self, db: DataBase, config: AstrBotConfig, config_manager: ConfigManager):
         self.db = db
@@ -36,65 +37,8 @@ class PlayerHandler:
         self.pill_manager = PillManager(self.db, self.config_manager)
         self.enlightenment_manager = None
 
-    async def _resolve_display_battle_hp(self, player: Player):
-        """Resolve current battle HP for info display, including Boss auto-recovery."""
-        impart_info = await self.db.ext.get_impart_info(player.user_id)
-        hp_buff = impart_info.impart_hp_per if impart_info else 0.0
-        max_hp = int(player.experience * (1 + hp_buff) // 2)
-        if max_hp <= 0:
-            return player.hp, 0, False, 0
-
-        current_hp = max(1, min(player.hp, max_hp)) if player.hp > 0 else max_hp
-        user_cd = await self.db.ext.get_user_cd(player.user_id)
-        if not user_cd:
-            if current_hp != player.hp:
-                player.hp = current_hp
-                await self.db.update_player(player)
-            return current_hp, max_hp, False, 0
-
-        extra_data = user_cd.get_extra_data()
-        recovery_enabled = bool(extra_data.get("boss_challenge_hp_recovering", 0))
-        cooldown_until = int(extra_data.get("boss_challenge_cd_until", 0) or 0)
-        cooldown_remaining = max(0, cooldown_until - int(time.time())) if cooldown_until else 0
-
-        # 兼容旧数据或异常中断场景：只要战斗 HP 低于上限，就补建恢复锚点。
-        if not recovery_enabled and current_hp < max_hp:
-            started_at = max(0, cooldown_until - 300) if cooldown_until else int(time.time())
-            extra_data["boss_challenge_hp_recovering"] = 1
-            extra_data["boss_challenge_hp_recovery_base_hp"] = current_hp
-            extra_data["boss_challenge_hp_recovery_started_at"] = started_at
-            user_cd.set_extra_data(extra_data)
-            await self.db.ext.update_user_cd(user_cd)
-            recovery_enabled = True
-
-        if recovery_enabled:
-            base_hp = int(extra_data.get("boss_challenge_hp_recovery_base_hp", 0) or 0)
-            started_at = int(extra_data.get("boss_challenge_hp_recovery_started_at", 0) or 0)
-            if base_hp <= 0:
-                base_hp = current_hp if current_hp > 0 else 1
-            if started_at <= 0:
-                started_at = max(0, cooldown_until - 300) if cooldown_until else int(time.time())
-
-            elapsed = max(0, int(time.time()) - started_at)
-            if elapsed >= 600:
-                current_hp = max_hp
-                extra_data.pop("boss_challenge_hp_recovering", None)
-                extra_data.pop("boss_challenge_hp_recovery_base_hp", None)
-                extra_data.pop("boss_challenge_hp_recovery_started_at", None)
-                user_cd.set_extra_data(extra_data)
-                await self.db.ext.update_user_cd(user_cd)
-            else:
-                current_hp = base_hp + int((max_hp - base_hp) * elapsed / 600)
-                current_hp = min(max_hp, max(1, current_hp))
-
-        if current_hp != player.hp:
-            player.hp = current_hp
-            await self.db.update_player(player)
-
-        return current_hp, max_hp, recovery_enabled, cooldown_remaining
-
     async def _resolve_display_battle_hp_unified(self, player: Player):
-        """Resolve current battle HP via the shared recovery utility."""
+        """统一结算展示用战斗 HP。"""
         impart_info = await self.db.ext.get_impart_info(player.user_id)
         hp_buff = impart_info.impart_hp_per if impart_info else 0.0
         max_hp = int(player.experience * (1 + hp_buff) // 2)
@@ -126,27 +70,27 @@ class PlayerHandler:
         return current_hp, max_hp, recovery_enabled, cooldown_remaining
 
     async def _resolve_display_status(self, player: Player) -> str:
-        """Resolve the player status shown in /我的信息."""
+        """返回 /我的信息 中展示的状态。"""
         user_cd = await self.db.ext.get_user_cd(player.user_id)
         if user_cd and user_cd.type != UserStatus.IDLE:
             return UserStatus.get_name(user_cd.type)
         return player.state or "空闲"
 
     async def handle_start_xiuxian(self, event: AstrMessageEvent, cultivation_type: str = ""):
-        """处理创建角色。"""
+        """创建角色。"""
         user_id = event.get_sender_id()
 
         if await self.db.get_player_by_id(user_id):
-            yield event.plain_result("道友，你已踏入仙途，无需重复创建角色。")
+            yield event.plain_result("道友，你已经踏入仙途，无需重复创建角色。")
             return
 
         cultivation_type = cultivation_type.strip()
         if not cultivation_type:
             help_msg = (
                 "欢迎踏入修仙之路\n"
-                "━━━━━━━━━━\n"
+                "━━━━━━━━━━━━━━\n"
                 "请选择你的修炼方式：\n\n"
-                "【灵修】以灵气为主，擅长法术\n"
+                "【灵修】以灵气为主，擅长术法\n"
                 "  - 灵气较高\n"
                 "  - 法伤成长较强\n"
                 "  - 精神力稳定\n\n"
@@ -170,16 +114,15 @@ class PlayerHandler:
 
         root_name = new_player.spiritual_root.replace("灵根", "")
         root_description = self.cultivation_manager._get_root_description(root_name)
-
         reply_msg = (
             f"恭喜道友 {event.get_sender_name()} 踏上仙途\n"
-            "━━━━━━━━━━\n"
+            "━━━━━━━━━━━━━━\n"
             f"修炼方式：{new_player.cultivation_type}\n"
             f"灵根：{new_player.spiritual_root}\n"
             f"评价：{root_description}\n"
             f"启动资金：{new_player.gold} 灵石\n"
-            "━━━━━━━━━━\n"
-            f"发送“{CMD_PLAYER_INFO}”查看当前状态"
+            "━━━━━━━━━━━━━━\n"
+            f"发送“{CMD_PLAYER_INFO}”查看当前状态。"
         )
         yield event.plain_result(reply_msg)
 
@@ -334,7 +277,7 @@ class PlayerHandler:
         user_cd = await self.db.ext.get_user_cd(player.user_id)
         if user_cd and user_cd.type != UserStatus.IDLE:
             current_status = UserStatus.get_name(user_cd.type)
-            yield event.plain_result(f"❌ 道友当前正{current_status}，无法闭关修炼！")
+            yield event.plain_result(f"道友当前正处于【{current_status}】状态，无法闭关修炼。")
             return
 
         player.state = "修炼中"
@@ -344,7 +287,7 @@ class PlayerHandler:
 
         yield event.plain_result(
             "🧘 道友已进入闭关状态\n"
-            "━━━━━━━━━━\n"
+            "━━━━━━━━━━━━━━\n"
             "闭关期间，你将潜心修炼。\n"
             f"发送“{CMD_END_CULTIVATION}”结束闭关。"
         )
@@ -423,15 +366,15 @@ class PlayerHandler:
         exceed_msg = ""
         if exceeded_time:
             effective_hours = max_cultivation_minutes // 60
-            exceed_msg = f"\n⚠️ 闭关超过{effective_hours}小时，仅计算前{effective_hours}小时修为"
+            exceed_msg = f"\n⚠ 闭关超过{effective_hours}小时，仅计算前{effective_hours}小时修为"
 
         reply_msg = (
-            "🪷 道友出关成功\n"
-            "━━━━━━━━━━\n"
+            "🌖 道友出关成功\n"
+            "━━━━━━━━━━━━━━\n"
             f"闭关时长：{time_str}\n"
             f"获得修为：{gained_exp:,}{exceed_msg}\n"
             f"当前修为：{player.experience:,}\n"
-            "━━━━━━━━━━\n"
+            "━━━━━━━━━━━━━━\n"
             "道友已回归红尘，可继续修行。"
         )
         reply_msg += enlightenment_msg
@@ -442,7 +385,7 @@ class PlayerHandler:
         """每日签到。"""
         today = datetime.now().strftime("%Y-%m-%d")
         if player.last_check_in_date == today:
-            yield event.plain_result("📅 道友今日已经签到过了，请明日再来。")
+            yield event.plain_result("📮 道友今日已经签到过了，请明日再来。")
             return
 
         values_config = self.config.get("VALUES", {}) if hasattr(self.config, "get") else {}
@@ -458,10 +401,10 @@ class PlayerHandler:
 
         reply_msg = (
             "✅ 签到成功\n"
-            "━━━━━━━━━━\n"
+            "━━━━━━━━━━━━━━\n"
             f"获得灵石：{check_in_gold}\n"
             f"当前灵石：{player.gold}\n"
-            "━━━━━━━━━━\n"
+            "━━━━━━━━━━━━━━\n"
             "明日再来，莫要忘记。"
         )
         yield event.plain_result(reply_msg)
@@ -472,16 +415,16 @@ class PlayerHandler:
         user_cd = await self.db.ext.get_user_cd(player.user_id)
         if user_cd and user_cd.type != UserStatus.IDLE:
             status_name = UserStatus.get_name(user_cd.type)
-            yield event.plain_result(f"❌ 你当前正在「{status_name}」，无法弃道重修。")
+            yield event.plain_result(f"你当前正处于【{status_name}】状态，无法弃道重修。")
             return
 
         if player.state != "空闲":
-            yield event.plain_result("❌ 只有处于空闲状态时才能弃道重修，请先结束其他活动。")
+            yield event.plain_result("只有处于空闲状态时才能弃道重修，请先结束其他活动。")
             return
 
         loan = await self.db.ext.get_active_loan(player.user_id)
         if loan:
-            yield event.plain_result("❌ 你仍有未结清的灵石贷款，无法重修，请先还款。")
+            yield event.plain_result("你仍有未结清的灵石贷款，无法重修，请先还款。")
             return
 
         key = f"rebirth_last_{player.user_id}"
@@ -495,17 +438,17 @@ class PlayerHandler:
                 hours = (remaining % 86400) // 3600
                 minutes = (remaining % 3600) // 60
                 yield event.plain_result(
-                    "⏳ 弃道重修冷却中\n"
-                    "━━━━━━━━━━\n"
+                    "🔒 弃道重修冷却中\n"
+                    "━━━━━━━━━━━━━━\n"
                     f"距离下次重修还需：{days}天{hours}小时{minutes}分钟"
                 )
                 return
 
         if confirm_text.strip() != "确认":
             yield event.plain_result(
-                "⚠️ 弃道重修将删除当前角色的所有数据，且无法撤回。\n"
+                "⚠ 弃道重修将删除当前角色的所有数据，且无法撤回。\n"
                 "限制：每7天只能重修一次，且必须处于空闲状态、无贷款时使用。\n"
-                "━━━━━━━━━━\n"
+                "━━━━━━━━━━━━━━\n"
                 "若你已做好准备，请发送：\n"
                 "弃道重修 确认"
             )
@@ -515,9 +458,9 @@ class PlayerHandler:
         await self.db.ext.set_system_config(key, str(now))
 
         yield event.plain_result(
-            "💀 你选择了弃道重修，旧生一切化为尘埃。\n"
-            "━━━━━━━━━━\n"
-            "可立即使用“我要修仙”重新踏上仙途。\n"
+            "💣 你选择了弃道重修，旧生一切化为尘埃。\n"
+            "━━━━━━━━━━━━━━\n"
+            "可立刻使用“我要修仙”重新踏上仙途。\n"
             "7天内不可再次重修。"
         )
 
@@ -527,16 +470,16 @@ class PlayerHandler:
         user_cd = await self.db.ext.get_user_cd(player.user_id)
         if user_cd and user_cd.type != UserStatus.IDLE:
             status_name = UserStatus.get_name(user_cd.type)
-            yield event.plain_result(f"❌ 你当前正在「{status_name}」，无法逆天改命。")
+            yield event.plain_result(f"你当前正处于【{status_name}】状态，无法逆天改命。")
             return
 
         if player.state != "空闲":
-            yield event.plain_result("❌ 只有处于空闲状态时才能逆天改命，请先结束其他活动。")
+            yield event.plain_result("只有处于空闲状态时才能逆天改命，请先结束其他活动。")
             return
 
         if player.gold < REROLL_ROOT_COST:
             yield event.plain_result(
-                "❌ 灵石不足\n"
+                "灵石不足\n"
                 f"逆天改命需要 {REROLL_ROOT_COST:,} 灵石\n"
                 f"当前灵石：{player.gold:,}"
             )
@@ -557,13 +500,13 @@ class PlayerHandler:
         old_quality = self._get_root_quality(old_root_name)
         new_quality = self._get_root_quality(new_root_name)
         if new_quality > old_quality:
-            result_emoji = "🎉"
+            result_emoji = "🎀"
             result_text = "天命改写，灵根蜕变！"
         elif new_quality < old_quality:
-            result_emoji = "😅"
+            result_emoji = "😄"
             result_text = "造化弄人，灵根退化了。"
         else:
-            result_emoji = "😐"
+            result_emoji = "😓"
             result_text = "命运轮转，灵根发生了更替。"
 
         yield event.plain_result(
@@ -579,7 +522,7 @@ class PlayerHandler:
         )
 
     def _get_root_quality(self, root_name: str) -> int:
-        """为逆天改命结果提供简单的灵根品级比较。"""
+        """为逆天改命结果提供灵根品级比较。"""
         quality_map = {
             "伪": 0,
             "金木水火": 1,

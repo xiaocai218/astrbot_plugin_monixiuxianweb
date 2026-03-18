@@ -14,7 +14,7 @@ class MiscHandler:
     async def handle_help(self, event: AstrMessageEvent):
         """显示修仙帮助。"""
         help_text = (
-            "\u4fee\u4ed9\u5e2e\u52a9 v3.1.61\n"
+            "\u4fee\u4ed9\u5e2e\u52a9 v3.1.66\n"
             "━━━━━━━━━━━━━━\n"
             "\n"
             "【入门基础】\n"
