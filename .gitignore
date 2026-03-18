@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+
+.venv/
+.idea/
+.codex/
+.serena/
+
+xiuxian_data_lite.db
+*.db
+
+webui/.DS_Store

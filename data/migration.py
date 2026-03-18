@@ -5,19 +5,18 @@ from typing import Dict, Callable, Awaitable
 from astrbot.api import logger
 from ..config_manager import ConfigManager
 
-LATEST_DB_VERSION = 20  # v20: 用户CD表添加额外数据字段
+LATEST_DB_VERSION = 20  # v20: user_cd ??? extra_data ??
 
 MIGRATION_TASKS: Dict[int, Callable[[aiosqlite.Connection, ConfigManager], Awaitable[None]]] = {}
-
 def migration(version: int):
-    """注册数据库迁移任务的装饰器"""
+    """注册数据库迁移函数。"""
     def decorator(func: Callable[[aiosqlite.Connection, ConfigManager], Awaitable[None]]):
         MIGRATION_TASKS[version] = func
         return func
     return decorator
 
 class MigrationManager:
-    """数据库迁移管理器"""
+    """数据库迁移管理器。"""
 
     def __init__(self, conn: aiosqlite.Connection, config_manager: ConfigManager):
         self.conn = conn
@@ -722,13 +721,12 @@ async def _migrate_to_v15(conn: aiosqlite.Connection, config_manager: ConfigMana
     # 插入默认秘境数据
     import json
     default_rifts = [
-        (1, "青云秘境", 1, 0, json.dumps({"exp": [500, 1500], "gold": [200, 800]})),
-        (2, "落日峡谷", 2, 3, json.dumps({"exp": [1500, 4000], "gold": [500, 2000]})),
-        (3, "万妖洞", 3, 6, json.dumps({"exp": [3000, 8000], "gold": [1000, 5000]})),
-        (4, "玄冰地宫", 4, 10, json.dumps({"exp": [5000, 15000], "gold": [2000, 10000]})),
-        (5, "上古遗迹", 5, 15, json.dumps({"exp": [10000, 30000], "gold": [5000, 20000]})),
+        (1, "\u9752\u4e91\u79d8\u5883", 1, 0, json.dumps({"exp": [500, 1500], "gold": [200, 800]})),
+        (2, "\u843d\u65e5\u5ce1\u8c37", 2, 3, json.dumps({"exp": [1500, 4000], "gold": [500, 2000]})),
+        (3, "\u4e07\u5996\u6d1e", 3, 6, json.dumps({"exp": [3000, 8000], "gold": [1000, 5000]})),
+        (4, "\u7384\u51b0\u5730\u5bab", 4, 10, json.dumps({"exp": [5000, 15000], "gold": [2000, 10000]})),
+        (5, "\u4e0a\u53e4\u9057\u8ff9", 5, 15, json.dumps({"exp": [10000, 30000], "gold": [5000, 20000]})),
     ]
-    
     for rift in default_rifts:
         try:
             await conn.execute(
@@ -753,8 +751,8 @@ async def _migrate_to_v16(conn: aiosqlite.Connection, config_manager: ConfigMana
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL UNIQUE,
             land_type INTEGER NOT NULL DEFAULT 1,
-            land_name TEXT NOT NULL DEFAULT '小洞天',
-            level INTEGER NOT NULL DEFAULT 1,
+            land_name TEXT NOT NULL DEFAULT '???',
+            land_name TEXT NOT NULL DEFAULT '\u5c0f\u6d1e\u5929',
             exp_bonus REAL NOT NULL DEFAULT 0.05,
             gold_per_hour INTEGER NOT NULL DEFAULT 100,
             last_collect_time INTEGER NOT NULL DEFAULT 0
@@ -788,8 +786,8 @@ async def _migrate_to_v16(conn: aiosqlite.Connection, config_manager: ConfigMana
         CREATE TABLE IF NOT EXISTS spirit_eyes (
             eye_id INTEGER PRIMARY KEY AUTOINCREMENT,
             eye_type INTEGER NOT NULL DEFAULT 1,
-            eye_name TEXT NOT NULL DEFAULT '下品灵眼',
-            exp_per_hour INTEGER NOT NULL DEFAULT 500,
+            eye_name TEXT NOT NULL DEFAULT '????',
+            eye_name TEXT NOT NULL DEFAULT '\u4e0b\u54c1\u7075\u773c',
             spawn_time INTEGER NOT NULL,
             owner_id TEXT,
             owner_name TEXT,
@@ -802,9 +800,9 @@ async def _migrate_to_v16(conn: aiosqlite.Connection, config_manager: ConfigMana
     import time
     now = int(time.time())
     initial_eyes = [
-        (1, "下品灵眼", 500, now),
-        (1, "下品灵眼", 500, now),
-        (2, "中品灵眼", 2000, now),
+        (1, "\u4e0b\u54c1\u7075\u773c", 500, now),
+        (1, "\u4e0b\u54c1\u7075\u773c", 500, now),
+        (2, "\u4e2d\u54c1\u7075\u773c", 2000, now),
     ]
     for eye in initial_eyes:
         await conn.execute(

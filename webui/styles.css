@@ -1,0 +1,90 @@
+﻿:root {
+  --bg: #0a0914;
+  --panel: #141127;
+  --panel-2: #1a1733;
+  --line: rgba(149, 101, 255, 0.28);
+  --gold: #e7bd63;
+  --cyan: #69d8f7;
+  --text: #f5edd8;
+  --muted: #998cb5;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background: radial-gradient(circle at top left, rgba(91, 63, 164, 0.35), transparent 28%), radial-gradient(circle at top right, rgba(37, 118, 160, 0.22), transparent 20%), linear-gradient(180deg, #0d0b19, #08070f 65%);
+  font-family: "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}
+.app-shell { width: min(1480px, calc(100vw - 40px)); margin: 24px auto 40px; }
+.hero, .panel {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(23, 19, 45, 0.95), rgba(15, 13, 30, 0.98));
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+.hero { display: flex; justify-content: space-between; gap: 24px; padding: 28px 32px; margin-bottom: 24px; }
+.eyebrow { margin: 0 0 8px; color: var(--gold); letter-spacing: 0.08em; }
+.hero h1 { margin: 0 0 10px; font-size: clamp(28px, 4vw, 44px); }
+.hero-text, .muted { color: var(--muted); }
+.selector-panel { width: min(320px, 100%); padding: 20px; border-radius: 18px; background: rgba(30, 24, 56, 0.88); border: 1px solid rgba(231, 189, 99, 0.28); }
+.selector-panel label { display: block; margin-bottom: 10px; color: var(--gold); font-weight: 700; }
+select { width: 100%; padding: 14px 16px; border: 1px solid rgba(105, 216, 247, 0.25); border-radius: 14px; color: var(--text); background: #120f24; font-size: 15px; }
+.layout-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 24px; }
+.player-panel { grid-row: span 7; }
+.panel { padding: 24px; }
+.panel-title-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
+.panel-title-row h2, .notes h3 { margin: 0; color: var(--gold); }
+.badge, .tab, .shop-tab, .inventory-tab { border-radius: 999px; border: 1px solid rgba(231, 189, 99, 0.28); background: rgba(85, 64, 21, 0.35); color: var(--gold); }
+.badge { padding: 8px 12px; font-size: 13px; }
+.tab-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.tab, .shop-tab, .inventory-tab { padding: 10px 14px; cursor: pointer; }
+.tab.is-active, .shop-tab.is-active, .inventory-tab.is-active { background: rgba(78, 121, 196, 0.28); color: var(--cyan); border-color: rgba(105, 216, 247, 0.28); }
+.player-card { display: grid; gap: 20px; }
+.player-header { padding: 22px; border-radius: 20px; background: linear-gradient(135deg, rgba(126, 83, 29, 0.24), rgba(30, 57, 101, 0.2)), rgba(24, 21, 43, 0.95); border: 1px solid rgba(231, 189, 99, 0.24); }
+.player-header h3 { margin: 0 0 12px; font-size: 42px; color: var(--gold); }
+.pill { display: inline-flex; padding: 10px 16px; border-radius: 999px; background: rgba(35, 125, 159, 0.22); color: var(--cyan); border: 1px solid rgba(105, 216, 247, 0.2); font-weight: 700; }
+.stats-grid, .detail-grid, .equipment-grid { display: grid; gap: 14px; }
+.stats-grid, .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.equipment-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.compact-grid { margin-bottom: 14px; }
+.stat-card, .kv-card { padding: 18px; border-radius: 18px; background: rgba(19, 17, 35, 0.96); border: 1px solid rgba(105, 216, 247, 0.14); }
+.stat-label, .kv-label { display: block; margin-bottom: 10px; color: var(--muted); font-size: 14px; }
+.stat-value, .kv-value { font-size: 28px; color: var(--gold); }
+.ranking-list, .storage-list, .inventory-list, .shop-list, .rift-list, .boss-history, .bank-transactions, .sect-list, .sect-members, .bounty-list, .bounty-history { display: grid; gap: 10px; }
+.ranking-row, .storage-row, .inventory-row, .shop-row, .rift-row, .boss-row, .boss-active-card, .bank-row, .sect-row, .bounty-row {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(19, 17, 35, 0.96);
+  border: 1px solid rgba(149, 101, 255, 0.14);
+}
+.ranking-row { display: grid; grid-template-columns: 56px 1fr auto; gap: 12px; align-items: center; }
+.storage-row { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; }
+.inventory-row, .shop-row, .rift-row, .boss-row, .boss-active-card, .bank-row, .sect-row, .bounty-row { display: grid; gap: 8px; }
+.rank-no { color: var(--gold); font-size: 22px; font-weight: 700; }
+.rank-name, .storage-name, .inventory-name, .shop-name, .rift-name, .boss-name, .bank-name, .sect-name, .bounty-name { font-weight: 700; }
+.rank-meta, .storage-meta, .inventory-meta, .inventory-desc, .shop-meta, .shop-desc, .rift-meta, .rift-desc, .boss-meta, .boss-desc, .bank-meta, .bank-desc, .sect-meta, .sect-desc, .bounty-meta, .bounty-desc { margin-top: 4px; color: var(--muted); font-size: 13px; }
+.rank-value, .storage-count, .inventory-count, .shop-price, .rift-value, .boss-value, .bank-value, .sect-rank, .bounty-rank { color: var(--gold); font-weight: 700; }
+.storage-bound, .inventory-bound, .rift-state-open, .rift-state-closed, .boss-state-live, .boss-state-dead { font-size: 13px; }
+.storage-bound, .inventory-bound, .rift-state-open, .boss-state-live { color: var(--cyan); }
+.rift-state-closed, .boss-state-dead { color: #d68f5b; }
+.shop-head, .rift-head, .boss-head, .bank-head, .inventory-head, .sect-head, .bounty-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.notes { margin-top: 18px; padding: 18px; border-radius: 18px; background: rgba(19, 17, 35, 0.96); border: 1px solid rgba(231, 189, 99, 0.14); }
+.compact-notes { margin-top: 0; margin-bottom: 16px; }
+.notes ul { margin: 12px 0 0; padding-left: 20px; color: var(--muted); line-height: 1.8; }
+.subsection-title { margin: 16px 0 10px; color: var(--cyan); font-size: 14px; letter-spacing: 0.08em; }
+.empty, .error { padding: 18px; border-radius: 16px; background: rgba(19, 17, 35, 0.96); color: var(--muted); }
+.error { color: #ff9787; border: 1px solid rgba(255, 151, 135, 0.2); }
+@media (max-width: 1024px) {
+  .layout-grid { grid-template-columns: 1fr; }
+  .player-panel { grid-row: auto; }
+  .hero { flex-direction: column; }
+}
+@media (max-width: 720px) {
+  .app-shell { width: min(100vw - 20px, 1480px); margin: 10px auto 24px; }
+  .hero, .panel { padding: 18px; border-radius: 20px; }
+  .stats-grid, .detail-grid, .equipment-grid, .storage-row { grid-template-columns: 1fr; }
+  .panel-title-row, .shop-head, .rift-head, .boss-head, .bank-head, .inventory-head, .sect-head, .bounty-head { flex-direction: column; align-items: flex-start; }
+}

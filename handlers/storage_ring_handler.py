@@ -1,4 +1,4 @@
-# handlers/storage_ring_handler.py
+﻿# handlers/storage_ring_handler.py
 
 from astrbot.api.event import AstrMessageEvent
 from astrbot.api.all import At, Plain
@@ -9,15 +9,14 @@ from ..models import Player
 from .utils import player_required
 
 CMD_STORAGE_RING = "储物戒"
-CMD_STORE_ITEM = "存入"
-CMD_RETRIEVE_ITEM = "取出"
+CMD_RETRIEVE_ITEM = "丢弃"
 CMD_UPGRADE_RING = "更换储物戒"
-CMD_DISCARD_ITEM = "丢弃"
+CMD_DISCARD_ITEM = "销毁"
 CMD_GIFT_ITEM = "赠予"
 CMD_ACCEPT_GIFT = "接收"
 CMD_REJECT_GIFT = "拒绝"
 CMD_STORE_ALL = "存入所有"
-CMD_RETRIEVE_ALL = "取出所有"
+CMD_RETRIEVE_ALL = "丢弃所有"
 CMD_SEARCH_ITEM = "搜索物品"
 CMD_VIEW_CATEGORY = "查看分类"
 
@@ -79,33 +78,18 @@ class StorageRingHandler:
             lines.append(f"\n{warning}\n")
 
         lines.append(f"\n{'=' * 28}\n")
-        lines.append(f"存入：{CMD_STORE_ITEM} 物品名 [数量]\n")
-        lines.append(f"取出：{CMD_RETRIEVE_ITEM} 物品名 [数量]\n")
+        lines.append(f"丢弃：{CMD_RETRIEVE_ITEM} 物品名 [数量]\n")
         lines.append(f"搜索：{CMD_SEARCH_ITEM} 关键词\n")
         lines.append(f"升级：{CMD_UPGRADE_RING} 储物戒名")
 
         yield event.plain_result("".join(lines))
 
     @player_required
-    async def handle_store_item(self, player: Player, event: AstrMessageEvent, args: str):
-        """存入物品到储物戒 - 已禁用手动存入"""
-        yield event.plain_result(
-            "📦 储物戒说明：\n"
-            "物品会在以下情况自动存入储物戒：\n"
-            "  · 商店购买物品\n"
-            "  · 历练/秘境获得物品\n"
-            "  · Boss击杀掉落\n"
-            "  · 悬赏任务奖励\n"
-            "  · 卸下装备\n"
-            "\n⚠️ 不支持手动存入物品"
-        )
-
-    @player_required
     async def handle_retrieve_item(self, player: Player, event: AstrMessageEvent, args: str):
         """从储物戒取出物品"""
         if not args or args.strip() == "":
             yield event.plain_result(
-                f"请指定要取出的物品\n"
+                f"请指定要丢弃的物品\n"
                 f"用法：{CMD_RETRIEVE_ITEM} 物品名 [数量]\n"
                 f"示例：{CMD_RETRIEVE_ITEM} 精铁 5"
             )
@@ -127,7 +111,7 @@ class StorageRingHandler:
             return
 
         # 取出物品
-        success, message = await self.storage_ring_manager.retrieve_item(player, item_name, count)
+        success, message = await self.storage_ring_manager.discard_item(player, item_name, count)
 
         if success:
             yield event.plain_result(f"✅ {message}")
@@ -482,10 +466,10 @@ class StorageRingHandler:
 
     @player_required
     async def handle_retrieve_all(self, player: Player, event: AstrMessageEvent, category: str = None):
-        """批量取出指定分类的物品"""
+        """批量丢弃指定分类的物品"""
         if not category or category.strip() == "":
             yield event.plain_result(
-                f"请指定要取出的分类\n"
+                f"请指定要丢弃的分类\n"
                 f"用法：{CMD_RETRIEVE_ALL} 分类名\n"
                 f"可用分类：材料、装备、功法、其他\n"
                 f"示例：{CMD_RETRIEVE_ALL} 材料"
@@ -505,19 +489,19 @@ class StorageRingHandler:
             yield event.plain_result(f"储物戒中没有【{category}】类物品")
             return
         
-        # 取出所有该分类的物品
+        # 丢弃所有该分类的物品
         retrieved = []
         failed = []
         for item_name, count in cat_items:
-            success, msg = await self.storage_ring_manager.retrieve_item(player, item_name, count)
+            success, msg = await self.storage_ring_manager.discard_item(player, item_name, count)
             if success:
                 retrieved.append(f"{item_name}×{count}")
             else:
                 failed.append(f"{item_name}：{msg}")
         
-        lines = [f"=== 批量取出【{category}】 ===\n"]
+        lines = [f"=== 批量丢弃【{category}】 ===\n"]
         if retrieved:
-            lines.append(f"✅ 已取出：\n")
+            lines.append(f"✅ 已丢弃：\n")
             for item in retrieved:
                 lines.append(f"  · {item}\n")
         if failed:
@@ -526,3 +510,5 @@ class StorageRingHandler:
                 lines.append(f"  · {item}\n")
         
         yield event.plain_result("".join(lines))
+
+

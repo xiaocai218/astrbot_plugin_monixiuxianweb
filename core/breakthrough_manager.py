@@ -12,6 +12,20 @@ from ..config_manager import ConfigManager
 class BreakthroughManager:
     """突破管理器 - 处理境界突破相关逻辑"""
 
+    TRIBULATION_TRIGGER_LEVEL = 13
+    TRIBULATION_SUCCESS_RATES = [
+        (13, 15, 0.70),
+        (16, 18, 0.60),
+        (19, 21, 0.50),
+        (22, 24, 0.40),
+        (25, 999, 0.30),
+    ]
+    TRIBULATION_MENTAL_THRESHOLD = 1000
+    TRIBULATION_MENTAL_BONUS = 0.02
+    TRIBULATION_MENTAL_BONUS_CAP = 0.10
+    TRIBULATION_SUCCESS_EXP_BONUS = 0.05
+    TRIBULATION_FAILURE_EXP_PENALTY = 0.05
+
     def __init__(self, db: DataBase, config_manager: ConfigManager, config: dict):
         self.db = db
         self.config_manager = config_manager
@@ -50,6 +64,36 @@ class BreakthroughManager:
             )
 
         return True, ""
+
+    def should_trigger_tribulation(self, target_level_index: int) -> bool:
+        """判断目标境界是否会触发天劫。"""
+        return target_level_index >= self.TRIBULATION_TRIGGER_LEVEL
+
+    def calculate_tribulation_success_rate(self, player: Player, target_level_index: int) -> float:
+        """计算轻量天劫成功率。"""
+        base_rate = 0.30
+        for start, end, rate in self.TRIBULATION_SUCCESS_RATES:
+            if start <= target_level_index <= end:
+                base_rate = rate
+                break
+
+        mental_bonus = min(
+            (player.mental_power // self.TRIBULATION_MENTAL_THRESHOLD) * self.TRIBULATION_MENTAL_BONUS,
+            self.TRIBULATION_MENTAL_BONUS_CAP,
+        )
+        return max(0.10, min(0.90, base_rate + mental_bonus))
+
+    def get_tribulation_preview(self, player: Player, target_level_index: int) -> str:
+        """获取突破信息中的天劫提示。"""
+        if not self.should_trigger_tribulation(target_level_index):
+            return ""
+
+        rate = self.calculate_tribulation_success_rate(player, target_level_index)
+        return (
+            "\n【天劫预警】\n"
+            f"此次突破将触发天劫校验，预计渡劫成功率：{rate:.1%}\n"
+            "天劫失败不会死亡，但会额外损失少量修为。"
+        )
 
     def calculate_breakthrough_success_rate(
         self,
@@ -142,6 +186,21 @@ class BreakthroughManager:
         next_level_name = next_level_data["level_name"]
 
         if breakthrough_success:
+            snapshot = {
+                "level_index": player.level_index,
+                "experience": player.experience,
+                "lifespan": player.lifespan,
+                "mental_power": player.mental_power,
+                "physical_damage": player.physical_damage,
+                "magic_damage": player.magic_damage,
+                "physical_defense": player.physical_defense,
+                "magic_defense": player.magic_defense,
+                "blood_qi": player.blood_qi,
+                "max_blood_qi": player.max_blood_qi,
+                "spiritual_qi": player.spiritual_qi,
+                "max_spiritual_qi": player.max_spiritual_qi,
+            }
+
             # 突破成功 - 提升境界并更新属性
             old_level_index = player.level_index
             player.level_index = next_level_index
@@ -179,9 +238,46 @@ class BreakthroughManager:
             player.magic_defense += magic_defense_gain
             player.mental_power += mental_power_gain
 
+            tribulation_msg = ""
+            if self.should_trigger_tribulation(next_level_index):
+                tribulation_rate = self.calculate_tribulation_success_rate(player, next_level_index)
+                if random.random() > tribulation_rate:
+                    for attr, value in snapshot.items():
+                        setattr(player, attr, value)
+
+                    exp_penalty = int(snapshot["experience"] * self.TRIBULATION_FAILURE_EXP_PENALTY)
+                    player.experience = max(0, snapshot["experience"] - exp_penalty)
+                    await self.db.update_player(player)
+
+                    fail_msg = (
+                        f"⚡ 天劫降临！\n"
+                        f"━━━━━━━━━━━━━━━\n"
+                        f"{rate_info}\n"
+                        f"━━━━━━━━━━━━━━━\n"
+                        f"你原本已经触摸到【{next_level_name}】的门槛，却未能渡过天劫。\n"
+                        f"本次突破最终失败，额外损失修为：{exp_penalty:,}\n"
+                        f"当前修为：{player.experience:,}\n"
+                        f"预计渡劫成功率：{tribulation_rate:.1%}\n"
+                        f"提示：提升精神力可略微提高渡劫成功率。"
+                    )
+
+                    logger.info(
+                        f"玩家 {player.user_id} 突破后天劫失败：{current_level_name} -> {next_level_name}，"
+                        f"渡劫率 {tribulation_rate:.2%}，额外损失修为 {exp_penalty}"
+                    )
+                    return False, fail_msg, False
+
+                tribulation_bonus = int(player.experience * self.TRIBULATION_SUCCESS_EXP_BONUS)
+                player.experience += tribulation_bonus
+                tribulation_msg = (
+                    f"\n\n⚡ 天劫降临！\n"
+                    f"你成功渡过天劫，额外获得修为：{tribulation_bonus:,}\n"
+                    f"渡劫成功率：{tribulation_rate:.1%}"
+                )
+
             # 保存到数据库
             await self.db.update_player(player)
-            
+
             # 检查并处理突破贷款自动还款
             loan_msg = await self._handle_breakthrough_loan_repay(player)
 
@@ -240,6 +336,8 @@ class BreakthroughManager:
             )
             
             # 如果有贷款相关消息，追加到成功消息后
+            if tribulation_msg:
+                success_msg += tribulation_msg
             if loan_msg:
                 success_msg += f"\n\n{loan_msg}"
 

@@ -1,0 +1,226 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>修仙 Web 预览</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">AstrBot 插件只读预览</p>
+        <h1>模拟修仙 Web 面板</h1>
+        <p class="hero-text">继续沿着最稳的路线推进：先把现有插件中的玩家、储物戒、详细背包、商店、秘境、Boss、银行和排行榜做成只读网页，不改原有指令逻辑。</p>
+      </div>
+      <div class="selector-panel">
+        <label for="player-select">选择玩家</label>
+        <select id="player-select"></select>
+        <p id="db-path" class="muted"></p>
+      </div>
+    </header>
+
+    <main class="layout-grid">
+      <section class="panel player-panel">
+        <div class="panel-title-row">
+          <h2>角色总览</h2>
+          <span class="badge">只读</span>
+        </div>
+        <div id="player-card" class="player-card"></div>
+      </section>
+
+      <section class="panel storage-panel">
+        <div class="panel-title-row">
+          <h2>储物戒</h2>
+          <span id="storage-summary" class="badge">载入中</span>
+        </div>
+        <div id="storage-list" class="storage-list"></div>
+        <div class="notes compact-notes">
+          <h3>&#35268;&#21017;&#35828;&#26126;</h3>
+          <div class="bank-desc">&#26222;&#36890;&#29289;&#21697;&#33719;&#24471;&#21518;&#20250;&#33258;&#21160;&#36827;&#20837;&#20648;&#29289;&#25106;&#25110;&#23545;&#24212;&#32972;&#21253;&#12290;&#29609;&#23478;&#20391;&#24050;&#19981;&#20877;&#25552;&#20379;&#25163;&#21160;&#23384;&#20837;&#65292;&#20063;&#19981;&#25903;&#25345;&#21462;&#20986;&#21040;&#26222;&#36890;&#32972;&#21253;&#65307;&#24403;&#21069;&#8220;&#21462;&#20986;&#8221;&#35821;&#20041;&#24050;&#35843;&#25972;&#20026;&#8220;&#20002;&#24323;&#8221;&#12290;</div>
+        </div>
+      </section>
+
+      <section class="panel inventory-panel">
+        <div class="panel-title-row">
+          <h2>背包详细页</h2>
+          <div class="tab-row">
+            <button class="inventory-tab is-active" data-inventory-tab="equipment">装备</button>
+            <button class="inventory-tab" data-inventory-tab="material">材料</button>
+            <button class="inventory-tab" data-inventory-tab="technique">功法</button>
+            <button class="inventory-tab" data-inventory-tab="other">其他</button>
+            <button class="inventory-tab" data-inventory-tab="pills">丹药</button>
+          </div>
+        </div>
+        <div id="inventory-summary" class="stats-grid compact-grid"></div>
+        <div id="inventory-list" class="inventory-list"></div>
+      </section>
+
+      <section class="panel rankings-panel">
+        <div class="panel-title-row">
+          <h2>排行榜</h2>
+          <div class="tab-row">
+            <button class="tab is-active" data-tab="level">境界</button>
+            <button class="tab" data-tab="wealth">灵石</button>
+            <button class="tab" data-tab="power">战力</button>
+          </div>
+        </div>
+        <div id="ranking-list" class="ranking-list"></div>
+      </section>
+
+      <section class="panel bank-panel">
+        <div class="panel-title-row">
+          <h2>灵石银行</h2>
+          <span class="badge">只读</span>
+        </div>
+        <div id="bank-overview" class="stats-grid"></div>
+        <div id="bank-loan" class="notes compact-notes"></div>
+        <div class="subsection-title">最近流水</div>
+        <div id="bank-transactions" class="bank-transactions"></div>
+      </section>
+
+      <section class="panel blessed-land-panel">
+        <div class="panel-title-row">
+          <h2>&#27934;&#22825;&#39029;</h2>
+          <span class="badge">&#21482;&#35835;</span>
+        </div>
+        <div id="blessed-land-current" class="notes compact-notes"></div>
+        <div class="subsection-title">&#32622;&#25442;&#35268;&#21017;</div>
+        <div id="blessed-land-rules" class="notes compact-notes"></div>
+        <div class="subsection-title">&#21487;&#36873;&#27934;&#22825;</div>
+        <div id="blessed-land-options" class="shop-list"></div>
+      </section>
+
+      <section class="panel adventure-panel">
+        <div class="panel-title-row">
+          <h2>&#21382;&#32451;&#39029;</h2>
+          <span class="badge">&#21482;&#35835;</span>
+        </div>
+        <div id="adventure-status" class="notes compact-notes"></div>
+        <div class="subsection-title">&#21487;&#36873;&#36335;&#32447;</div>
+        <div id="adventure-routes" class="shop-list"></div>
+      </section>
+
+
+      <section class="panel spirit-farm-panel">
+        <div class="panel-title-row">
+          <h2>&#28789;&#30000;&#39029;</h2>
+          <span class="badge">&#21482;&#35835;</span>
+        </div>
+        <div id="spirit-farm-current" class="notes compact-notes"></div>
+        <div class="subsection-title">&#31181;&#26893;&#29366;&#24577;</div>
+        <div id="spirit-farm-crops" class="shop-list"></div>
+        <div class="subsection-title">&#21487;&#31181;&#28789;&#33609;</div>
+        <div id="spirit-farm-herbs" class="shop-list"></div>
+      </section>
+
+
+      <section class="panel spirit-eye-panel">
+        <div class="panel-title-row">
+          <h2>&#28789;&#30524;&#39029;</h2>
+          <span class="badge">&#21482;&#35835;</span>
+        </div>
+        <div id="spirit-eye-current" class="notes compact-notes"></div>
+        <div class="subsection-title">&#28789;&#30524;&#21015;&#34920;</div>
+        <div id="spirit-eye-list" class="shop-list"></div>
+      </section>
+
+      <section class="panel dual-panel">
+        <div class="panel-title-row">
+          <h2>&#21452;&#20462;&#39029;</h2>
+          <span class="badge">&#21482;&#35835;</span>
+        </div>
+        <div id="dual-current" class="notes compact-notes"></div>
+        <div class="subsection-title">&#21452;&#20462;&#35268;&#21017;</div>
+        <div id="dual-rules" class="notes compact-notes"></div>
+        <div class="subsection-title">&#24453;&#22788;&#29702;&#35831;&#27714;</div>
+        <div id="dual-request" class="shop-list"></div>
+      </section>
+
+      <section class="panel sect-panel">
+        <div class="panel-title-row">
+          <h2>&#23447;&#38376;&#39029;</h2>
+          <span class="badge">&#21482;&#35835;</span>
+        </div>
+        <div id="sect-player" class="notes compact-notes"></div>
+        <div class="subsection-title">&#23447;&#38376;&#27036;</div>
+        <div id="sect-ranking-list" class="sect-list"></div>
+        <div class="subsection-title">&#25104;&#21592;&#39044;&#35272;</div>
+        <div id="sect-members" class="sect-members"></div>
+      </section>
+
+      <section class="panel boss-panel">
+        <div class="panel-title-row">
+          <h2>世界 Boss</h2>
+          <span id="boss-refresh" class="badge">载入中</span>
+        </div>
+        <div id="boss-active" class="boss-active"></div>
+        <div class="subsection-title">最近 Boss 记录</div>
+        <div id="boss-history" class="boss-history"></div>
+      </section>
+
+
+      <section class="panel bounty-panel">
+        <div class="panel-title-row">
+          <h2>&#24748;&#36175;&#39029;</h2>
+          <span class="badge">&#21482;&#35835;</span>
+        </div>
+        <div id="bounty-active" class="notes compact-notes"></div>
+        <div class="subsection-title">&#21487;&#25509;&#24748;&#36175;</div>
+        <div id="bounty-available" class="bounty-list"></div>
+        <div class="subsection-title">&#26368;&#36817;&#35760;&#24405;</div>
+        <div id="bounty-recent" class="bounty-history"></div>
+      </section>
+
+      <section class="panel rift-panel">
+        <div class="panel-title-row">
+          <h2>秘境预览</h2>
+          <span id="rift-refresh" class="badge">载入中</span>
+        </div>
+        <div id="rift-status" class="notes compact-notes"></div>
+        <div class="subsection-title">本轮开放</div>
+        <div id="rift-open-list" class="rift-list"></div>
+        <div class="subsection-title">暂未开放</div>
+        <div id="rift-closed-list" class="rift-list"></div>
+      </section>
+
+      <section class="panel world-panel">
+        <div class="panel-title-row">
+          <h2>世界概览</h2>
+        </div>
+        <div id="world-stats" class="stats-grid"></div>
+        <div class="notes">
+          <h3>当前阶段</h3>
+          <ul>
+            <li>已支持读取玩家面板、装备、储物戒摘要、排行榜。</li>
+            <li>已新增背包详细页，可分类查看装备、材料、功法、其他与丹药。</li>
+            <li>已新增商店预览区，可浏览丹阁、器阁、百宝阁风格内容。</li>
+            <li>已新增秘境预览区，可区分本轮开放和未开放秘境。</li>
+            <li>已新增 Boss 面板，可查看当前 Boss 与最近 Boss 记录。</li>
+            <li>已新增银行面板，可查看存款、利息、贷款与最近流水。</li>
+            <li>&#24050;&#26032;&#22686;&#27934;&#22825;&#39029;&#19982;&#21382;&#32451;&#39029;&#65292;&#21487;&#26597;&#30475;&#24403;&#21069;&#29366;&#24577;&#21644;&#29616;&#26377;&#35268;&#21017;&#12290;</li>
+            <li>&#24050;&#26032;&#22686;&#28789;&#30000;&#39029;&#65292;&#21487;&#26597;&#30475;&#28789;&#30000;&#31561;&#32423;&#12289;&#31181;&#26893;&#36827;&#24230;&#19982;&#21487;&#31181;&#28789;&#33609;&#12290;</li>
+            <li>&#24050;&#26032;&#22686;&#28789;&#30524;&#39029;&#65292;&#21487;&#26597;&#30475;&#25105;&#30340;&#28789;&#30524;&#12289;&#24453;&#25910;&#21462;&#25910;&#30410;&#19982;&#25152;&#26377;&#28789;&#30524;&#24402;&#23646;&#12290;</li>
+            <li>暂不提供网页端写入操作，避免影响现有插件流程。</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="panel shop-panel">
+        <div class="panel-title-row">
+          <h2>商店预览</h2>
+          <div class="tab-row">
+            <button class="shop-tab is-active" data-shop-tab="pill">丹阁</button>
+            <button class="shop-tab" data-shop-tab="weapon">器阁</button>
+            <button class="shop-tab" data-shop-tab="treasure">百宝阁</button>
+          </div>
+        </div>
+        <div id="shop-list" class="shop-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

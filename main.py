@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 from functools import wraps
 from pathlib import Path
 from astrbot.api import logger, AstrBotConfig
@@ -12,13 +12,15 @@ from .handlers import (
     SectHandlers, BossHandlers, CombatHandlers, RankingHandlers,
     RiftHandlers, AdventureHandlers, AlchemyHandlers, ImpartHandlers,
     NicknameHandler, BankHandlers, BountyHandlers, ImpartPkHandlers,
-    BlessedLandHandlers, SpiritFarmHandlers, DualCultivationHandlers, SpiritEyeHandlers
+    BlessedLandHandlers, SpiritFarmHandlers, DualCultivationHandlers, SpiritEyeHandlers,
+    BlackMarketHandler, EnlightenmentHandlers, FortuneHandlers
 )
 from .managers import (
     CombatManager, SectManager, BossManager, RiftManager, 
     RankingManager, AdventureManager, AlchemyManager, ImpartManager,
     BankManager, BountyManager, ImpartPkManager,
-    BlessedLandManager, SpiritFarmManager, DualCultivationManager, SpiritEyeManager
+    BlessedLandManager, SpiritFarmManager, DualCultivationManager, SpiritEyeManager,
+    EnlightenmentManager, FortuneManager
 )
 
 
@@ -54,15 +56,14 @@ CMD_TREASURE_PAVILION = "百宝阁"
 CMD_ITEM_INFO = "物品信息"
 CMD_BUY = "购买"
 CMD_STORAGE_RING = "储物戒"
-CMD_STORE_ITEM = "存入"
-CMD_RETRIEVE_ITEM = "取出"
+CMD_RETRIEVE_ITEM = "丢弃"
 CMD_UPGRADE_RING = "更换储物戒"
-CMD_DISCARD_ITEM = "丢弃"
+CMD_DISCARD_ITEM = "销毁"
 CMD_GIFT_ITEM = "赠予"
 CMD_ACCEPT_GIFT = "接收"
 CMD_REJECT_GIFT = "拒绝"
 CMD_SEARCH_ITEM = "搜索物品"
-CMD_RETRIEVE_ALL = "取出所有"
+CMD_RETRIEVE_ALL = "丢弃所有"
 
 # 宗门系统指令
 CMD_CREATE_SECT = "创建宗门"
@@ -139,6 +140,7 @@ CMD_IMPART_RANKING = "传承排行"
 # Phase 4: 洞天福地
 CMD_BLESSED_LAND_INFO = "我的洞天"
 CMD_BLESSED_LAND_BUY = "购买洞天"
+CMD_BLESSED_LAND_REPLACE = "置换洞天"
 CMD_BLESSED_LAND_UPGRADE = "升级洞天"
 CMD_BLESSED_LAND_COLLECT = "洞天收取"
 
@@ -161,6 +163,12 @@ CMD_SPIRIT_EYE_COLLECT = "灵眼收取"
 CMD_SPIRIT_EYE_RELEASE = "释放灵眼"
 
 CMD_REBIRTH = "弃道重修"
+CMD_REROLL_ROOT = "逆天改命"
+CMD_BLACK_MARKET = "黑市"
+CMD_BLACK_MARKET_BUY = "黑市购买"
+CMD_ENLIGHTENMENT_INFO = "悟道信息"
+CMD_FORTUNE_INFO = "福缘信息"
+CMD_CLAIM_FORTUNE = "求福缘"
 class XiuXianPlugin(Star):
     """修仙插件 - 文字修仙游戏"""
 
@@ -210,7 +218,7 @@ class XiuXianPlugin(Star):
         self.nickname_handler = NicknameHandler(self.db)  # Phase 1
         
         # Phase 2: 灵石银行和悬赏令
-        self.bank_mgr = BankManager(self.db, self.config)
+        self.bank_mgr = BankManager(self.db, self.config, self.config_manager)
         self.bounty_mgr = BountyManager(self.db, self.storage_ring_mgr)
         self.bank_handlers = BankHandlers(self.db, self.bank_mgr)
         self.bounty_handlers = BountyHandlers(self.db, self.bounty_mgr)
@@ -228,6 +236,12 @@ class XiuXianPlugin(Star):
         self.dual_cult_handlers = DualCultivationHandlers(self.db, self.dual_cult_mgr)
         self.spirit_eye_mgr = SpiritEyeManager(self.db)
         self.spirit_eye_handlers = SpiritEyeHandlers(self.db, self.spirit_eye_mgr, self.combat_handlers)
+        self.black_market_handler = BlackMarketHandler(self.db, self.config_manager)
+        self.enlightenment_mgr = EnlightenmentManager(self.db)
+        self.enlightenment_handlers = EnlightenmentHandlers(self.db, self.enlightenment_mgr)
+        self.player_handler.enlightenment_manager = self.enlightenment_mgr
+        self.fortune_mgr = FortuneManager(self.db)
+        self.fortune_handlers = FortuneHandlers(self.db, self.fortune_mgr)
         
         self.boss_task = None # Boss生成任务
         self.loan_check_task = None # 贷款逾期检查任务
@@ -608,6 +622,42 @@ class XiuXianPlugin(Star):
         async for r in self.player_handler.handle_rebirth(event, confirm):
             yield r
 
+    @filter.command(CMD_REROLL_ROOT, "逆天改命（10000灵石重置灵根）")
+    @require_whitelist
+    async def handle_reroll_root(self, event: AstrMessageEvent):
+        async for r in self.player_handler.handle_reroll_root(event):
+            yield r
+
+    @filter.command(CMD_BLACK_MARKET, "查看黑市")
+    @require_whitelist
+    async def handle_black_market(self, event: AstrMessageEvent):
+        async for r in self.black_market_handler.handle_black_market(event):
+            yield r
+
+    @filter.command(CMD_BLACK_MARKET_BUY, "黑市购买丹药")
+    @require_whitelist
+    async def handle_black_market_buy(self, event: AstrMessageEvent, item_spec: str = ""):
+        async for r in self.black_market_handler.handle_black_market_buy(event, item_spec):
+            yield r
+
+    @filter.command(CMD_ENLIGHTENMENT_INFO, "查看悟道信息")
+    @require_whitelist
+    async def handle_enlightenment_info(self, event: AstrMessageEvent):
+        async for r in self.enlightenment_handlers.handle_enlightenment_info(event):
+            yield r
+
+    @filter.command(CMD_FORTUNE_INFO, "查看福缘信息")
+    @require_whitelist
+    async def handle_fortune_info(self, event: AstrMessageEvent):
+        async for r in self.fortune_handlers.handle_fortune_info(event):
+            yield r
+
+    @filter.command(CMD_CLAIM_FORTUNE, "主动求取福缘")
+    @require_whitelist
+    async def handle_claim_fortune(self, event: AstrMessageEvent):
+        async for r in self.fortune_handlers.handle_claim_fortune(event):
+            yield r
+
     @filter.command(CMD_START_CULTIVATION, "开始闭关修炼")
     @require_whitelist
     async def handle_start_cultivation(self, event: AstrMessageEvent):
@@ -710,13 +760,7 @@ class XiuXianPlugin(Star):
         async for r in self.storage_ring_handler.handle_storage_ring(event):
             yield r
 
-    @filter.command(CMD_STORE_ITEM, "存入物品到储物戒")
-    @require_whitelist
-    async def handle_store_item(self, event: AstrMessageEvent, args: str = ""):
-        async for r in self.storage_ring_handler.handle_store_item(event, args):
-            yield r
-
-    @filter.command(CMD_RETRIEVE_ITEM, "从储物戒取出物品")
+    @filter.command(CMD_RETRIEVE_ITEM, "\u4e22\u5f03\u50a8\u7269\u6212\u4e2d\u7684\u7269\u54c1")
     @require_whitelist
     async def handle_retrieve_item(self, event: AstrMessageEvent, args: str = ""):
         async for r in self.storage_ring_handler.handle_retrieve_item(event, args):
@@ -728,7 +772,7 @@ class XiuXianPlugin(Star):
         async for r in self.storage_ring_handler.handle_upgrade_ring(event, ring_name):
             yield r
 
-    @filter.command(CMD_DISCARD_ITEM, "丢弃储物戒中的物品")
+    @filter.command(CMD_DISCARD_ITEM, "\u9500\u6bc1\u50a8\u7269\u6212\u4e2d\u7684\u7269\u54c1")
     @require_whitelist
     async def handle_discard_item(self, event: AstrMessageEvent, args: str = ""):
         async for r in self.storage_ring_handler.handle_discard_item(event, args):
@@ -758,7 +802,7 @@ class XiuXianPlugin(Star):
         async for r in self.storage_ring_handler.handle_search_item(event, keyword):
             yield r
 
-    @filter.command(CMD_RETRIEVE_ALL, "批量取出物品")
+    @filter.command(CMD_RETRIEVE_ALL, "\u6279\u91cf\u4e22\u5f03\u6307\u5b9a\u5206\u7c7b\u7269\u54c1")
     @require_whitelist
     async def handle_retrieve_all(self, event: AstrMessageEvent, category: str = ""):
         async for r in self.storage_ring_handler.handle_retrieve_all(event, category):
@@ -1130,6 +1174,12 @@ class XiuXianPlugin(Star):
         async for r in self.blessed_land_handlers.handle_purchase(event, land_type):
             yield r
 
+    @filter.command(CMD_BLESSED_LAND_REPLACE, "置换洞天")
+    @require_whitelist
+    async def handle_blessed_land_replace(self, event: AstrMessageEvent, land_type: str = ""):
+        async for r in self.blessed_land_handlers.handle_replace(event, land_type):
+            yield r
+
     @filter.command(CMD_BLESSED_LAND_UPGRADE, "升级洞天")
     @require_whitelist
     async def handle_blessed_land_upgrade(self, event: AstrMessageEvent):
@@ -1216,3 +1266,5 @@ class XiuXianPlugin(Star):
     async def handle_spirit_eye_release(self, event: AstrMessageEvent):
         async for r in self.spirit_eye_handlers.handle_release(event):
             yield r
+
+

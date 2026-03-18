@@ -6,6 +6,7 @@ from datetime import datetime
 from astrbot.api import AstrBotConfig
 from astrbot.api.event import AstrMessageEvent
 
+from ..battle_hp_utils import resolve_boss_battle_hp_state
 from ..config_manager import ConfigManager
 from ..core import CultivationManager, PillManager
 from ..data import DataBase
@@ -19,6 +20,7 @@ CMD_START_CULTIVATION = "闭关"
 CMD_END_CULTIVATION = "出关"
 CMD_CHECK_IN = "签到"
 REBIRTH_COOLDOWN = 7 * 24 * 3600
+REROLL_ROOT_COST = 10000
 
 __all__ = ["PlayerHandler"]
 
@@ -32,6 +34,103 @@ class PlayerHandler:
         self.config_manager = config_manager
         self.cultivation_manager = CultivationManager(config, config_manager)
         self.pill_manager = PillManager(self.db, self.config_manager)
+        self.enlightenment_manager = None
+
+    async def _resolve_display_battle_hp(self, player: Player):
+        """Resolve current battle HP for info display, including Boss auto-recovery."""
+        impart_info = await self.db.ext.get_impart_info(player.user_id)
+        hp_buff = impart_info.impart_hp_per if impart_info else 0.0
+        max_hp = int(player.experience * (1 + hp_buff) // 2)
+        if max_hp <= 0:
+            return player.hp, 0, False, 0
+
+        current_hp = max(1, min(player.hp, max_hp)) if player.hp > 0 else max_hp
+        user_cd = await self.db.ext.get_user_cd(player.user_id)
+        if not user_cd:
+            if current_hp != player.hp:
+                player.hp = current_hp
+                await self.db.update_player(player)
+            return current_hp, max_hp, False, 0
+
+        extra_data = user_cd.get_extra_data()
+        recovery_enabled = bool(extra_data.get("boss_challenge_hp_recovering", 0))
+        cooldown_until = int(extra_data.get("boss_challenge_cd_until", 0) or 0)
+        cooldown_remaining = max(0, cooldown_until - int(time.time())) if cooldown_until else 0
+
+        # 兼容旧数据或异常中断场景：只要战斗 HP 低于上限，就补建恢复锚点。
+        if not recovery_enabled and current_hp < max_hp:
+            started_at = max(0, cooldown_until - 300) if cooldown_until else int(time.time())
+            extra_data["boss_challenge_hp_recovering"] = 1
+            extra_data["boss_challenge_hp_recovery_base_hp"] = current_hp
+            extra_data["boss_challenge_hp_recovery_started_at"] = started_at
+            user_cd.set_extra_data(extra_data)
+            await self.db.ext.update_user_cd(user_cd)
+            recovery_enabled = True
+
+        if recovery_enabled:
+            base_hp = int(extra_data.get("boss_challenge_hp_recovery_base_hp", 0) or 0)
+            started_at = int(extra_data.get("boss_challenge_hp_recovery_started_at", 0) or 0)
+            if base_hp <= 0:
+                base_hp = current_hp if current_hp > 0 else 1
+            if started_at <= 0:
+                started_at = max(0, cooldown_until - 300) if cooldown_until else int(time.time())
+
+            elapsed = max(0, int(time.time()) - started_at)
+            if elapsed >= 600:
+                current_hp = max_hp
+                extra_data.pop("boss_challenge_hp_recovering", None)
+                extra_data.pop("boss_challenge_hp_recovery_base_hp", None)
+                extra_data.pop("boss_challenge_hp_recovery_started_at", None)
+                user_cd.set_extra_data(extra_data)
+                await self.db.ext.update_user_cd(user_cd)
+            else:
+                current_hp = base_hp + int((max_hp - base_hp) * elapsed / 600)
+                current_hp = min(max_hp, max(1, current_hp))
+
+        if current_hp != player.hp:
+            player.hp = current_hp
+            await self.db.update_player(player)
+
+        return current_hp, max_hp, recovery_enabled, cooldown_remaining
+
+    async def _resolve_display_battle_hp_unified(self, player: Player):
+        """Resolve current battle HP via the shared recovery utility."""
+        impart_info = await self.db.ext.get_impart_info(player.user_id)
+        hp_buff = impart_info.impart_hp_per if impart_info else 0.0
+        max_hp = int(player.experience * (1 + hp_buff) // 2)
+        if max_hp <= 0:
+            return player.hp, 0, False, 0
+
+        current_hp = max(1, min(player.hp, max_hp)) if player.hp > 0 else max_hp
+        user_cd = await self.db.ext.get_user_cd(player.user_id)
+        if not user_cd:
+            if current_hp != player.hp:
+                player.hp = current_hp
+                await self.db.update_player(player)
+            return current_hp, max_hp, False, 0
+
+        current_hp, recovery_enabled, cooldown_remaining, resolved_extra_data, changed = resolve_boss_battle_hp_state(
+            current_hp,
+            max_hp,
+            user_cd.get_extra_data(),
+        )
+
+        if changed:
+            user_cd.set_extra_data(resolved_extra_data)
+            await self.db.ext.update_user_cd(user_cd)
+
+        if current_hp != player.hp:
+            player.hp = current_hp
+            await self.db.update_player(player)
+
+        return current_hp, max_hp, recovery_enabled, cooldown_remaining
+
+    async def _resolve_display_status(self, player: Player) -> str:
+        """Resolve the player status shown in /我的信息."""
+        user_cd = await self.db.ext.get_user_cd(player.user_id)
+        if user_cd and user_cd.type != UserStatus.IDLE:
+            return UserStatus.get_name(user_cd.type)
+        return player.state or "空闲"
 
     async def handle_start_xiuxian(self, event: AstrMessageEvent, cultivation_type: str = ""):
         """处理创建角色。"""
@@ -111,6 +210,9 @@ class PlayerHandler:
             + int(total_attrs["mental_power"]) // 10
         )
 
+        battle_hp, battle_hp_max, hp_recovering, boss_cooldown_remaining = await self._resolve_display_battle_hp_unified(player)
+        display_status = await self._resolve_display_status(player)
+
         sect_name = "无宗门"
         position_name = "散修"
         if player.sect_id and player.sect_id != 0:
@@ -148,11 +250,18 @@ class PlayerHandler:
             "\n"
             "【修炼属性】\n"
             f"  修炼方式：{player.cultivation_type}\n"
-            f"  状态：{player.state}\n"
+            f"  状态：{display_status}\n"
             f"  寿命：{player.lifespan}\n"
             f"  精神力：{total_attrs['mental_power']}\n"
-            f"  战斗HP：{player.hp}\n"
+            f"  战斗HP：{battle_hp}/{battle_hp_max}\n"
         )
+
+        if hp_recovering:
+            if boss_cooldown_remaining > 0:
+                minutes = boss_cooldown_remaining // 60
+                seconds = boss_cooldown_remaining % 60
+                reply_msg += f"  Boss冷却：{minutes}分{seconds}秒\n"
+            reply_msg += "  战斗HP恢复：每分钟恢复10%，约10分钟恢复满血\n"
 
         if player.cultivation_type == "体修":
             reply_msg += (
@@ -290,6 +399,13 @@ class PlayerHandler:
             pill_multipliers,
         )
 
+        enlightenment_msg = ""
+        if self.enlightenment_manager:
+            triggered, msg, bonus_exp = await self.enlightenment_manager.try_enlightenment(player, gained_exp)
+            if triggered:
+                gained_exp += bonus_exp
+                enlightenment_msg = f"\n\n{msg}"
+
         player.experience += gained_exp
         player.state = "空闲"
         player.cultivation_start_time = 0
@@ -318,6 +434,7 @@ class PlayerHandler:
             "━━━━━━━━━━\n"
             "道友已回归红尘，可继续修行。"
         )
+        reply_msg += enlightenment_msg
         yield event.plain_result(reply_msg)
 
     @player_required
@@ -403,3 +520,113 @@ class PlayerHandler:
             "可立即使用“我要修仙”重新踏上仙途。\n"
             "7天内不可再次重修。"
         )
+
+    @player_required
+    async def handle_reroll_root(self, player: Player, event: AstrMessageEvent):
+        """逆天改命：花费灵石重置灵根。"""
+        user_cd = await self.db.ext.get_user_cd(player.user_id)
+        if user_cd and user_cd.type != UserStatus.IDLE:
+            status_name = UserStatus.get_name(user_cd.type)
+            yield event.plain_result(f"❌ 你当前正在「{status_name}」，无法逆天改命。")
+            return
+
+        if player.state != "空闲":
+            yield event.plain_result("❌ 只有处于空闲状态时才能逆天改命，请先结束其他活动。")
+            return
+
+        if player.gold < REROLL_ROOT_COST:
+            yield event.plain_result(
+                "❌ 灵石不足\n"
+                f"逆天改命需要 {REROLL_ROOT_COST:,} 灵石\n"
+                f"当前灵石：{player.gold:,}"
+            )
+            return
+
+        old_root = player.spiritual_root
+        old_root_name = old_root.replace("灵根", "")
+        old_description = self.cultivation_manager._get_root_description(old_root_name)
+
+        new_root_name = self.cultivation_manager._get_random_spiritual_root()
+        new_root = f"{new_root_name}灵根"
+        new_description = self.cultivation_manager._get_root_description(new_root_name)
+
+        player.gold -= REROLL_ROOT_COST
+        player.spiritual_root = new_root
+        await self.db.update_player(player)
+
+        old_quality = self._get_root_quality(old_root_name)
+        new_quality = self._get_root_quality(new_root_name)
+        if new_quality > old_quality:
+            result_emoji = "🎉"
+            result_text = "天命改写，灵根蜕变！"
+        elif new_quality < old_quality:
+            result_emoji = "😅"
+            result_text = "造化弄人，灵根退化了。"
+        else:
+            result_emoji = "😐"
+            result_text = "命运轮转，灵根发生了更替。"
+
+        yield event.plain_result(
+            f"{result_emoji} 逆天改命 {result_emoji}\n"
+            "━━━━━━━━━━━━━━\n"
+            f"消耗灵石：{REROLL_ROOT_COST:,}\n"
+            f"原灵根：{old_root}\n"
+            f"  {old_description}\n"
+            f"新灵根：{new_root}\n"
+            f"  {new_description}\n"
+            f"结果：{result_text}\n"
+            f"剩余灵石：{player.gold:,}"
+        )
+
+    def _get_root_quality(self, root_name: str) -> int:
+        """为逆天改命结果提供简单的灵根品级比较。"""
+        quality_map = {
+            "伪": 0,
+            "金木水火": 1,
+            "金木水土": 1,
+            "金木火土": 1,
+            "金水火土": 1,
+            "木水火土": 1,
+            "金木水": 2,
+            "金木火": 2,
+            "金木土": 2,
+            "金水火": 2,
+            "金水土": 2,
+            "金火土": 2,
+            "木水火": 2,
+            "木水土": 2,
+            "木火土": 2,
+            "水火土": 2,
+            "金木": 3,
+            "金水": 3,
+            "金火": 3,
+            "金土": 3,
+            "木水": 3,
+            "木火": 3,
+            "木土": 3,
+            "水火": 3,
+            "水土": 3,
+            "火土": 3,
+            "金": 4,
+            "木": 4,
+            "水": 4,
+            "火": 4,
+            "土": 4,
+            "雷": 5,
+            "冰": 5,
+            "风": 5,
+            "暗": 5,
+            "光": 5,
+            "天金": 6,
+            "天木": 6,
+            "天水": 6,
+            "天火": 6,
+            "天土": 6,
+            "天雷": 6,
+            "阴阳": 7,
+            "融合": 7,
+            "混沌": 8,
+            "先天道体": 9,
+            "神圣体质": 9,
+        }
+        return quality_map.get(root_name, 3)
