@@ -8,6 +8,7 @@ from ..models import Player
 from ..models_extended import UserStatus
 from .battle_hp_service import BattleHpService
 from .combat_manager import CombatManager
+from .pet_battle_service import PetBattleService
 
 __all__ = ["ImpartPkManager"]
 
@@ -19,6 +20,7 @@ class ImpartPkManager:
         self.db = db
         self.combat_mgr = combat_mgr
         self.battle_hp_service = BattleHpService(db, combat_mgr)
+        self.pet_battle_service = PetBattleService(db)
 
     async def _get_or_create_user_cd(self, user_id: str):
         return await self.battle_hp_service.get_or_create_user_cd(user_id)
@@ -48,7 +50,15 @@ class ImpartPkManager:
         if not atk_stats or not def_stats:
             return False, "挑战双方都需要已踏入修仙之路。", {}
 
-        battle_result = self.combat_mgr.player_vs_player(atk_stats, def_stats, combat_type=2)
+        attacker_pet_context = await self.pet_battle_service.build_battle_context(attacker.user_id)
+        defender_pet_context = await self.pet_battle_service.build_battle_context(defender.user_id)
+        battle_result = self.combat_mgr.player_vs_player(
+            atk_stats,
+            def_stats,
+            combat_type=2,
+            pet_context1=attacker_pet_context,
+            pet_context2=defender_pet_context,
+        )
         attacker_final_hp = battle_result["player1_final_hp"]
         attacker_final_mp = battle_result["player1_final_mp"]
         defender_final_hp = battle_result["player2_final_hp"]

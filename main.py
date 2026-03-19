@@ -28,6 +28,7 @@ from .handlers import (
     ImpartPkHandlers,
     MiscHandler,
     NicknameHandler,
+    PetHandlers,
     PillHandler,
     PlayerHandler,
     RankingHandlers,
@@ -51,6 +52,7 @@ from .managers import (
     FortuneManager,
     ImpartManager,
     ImpartPkManager,
+    PetManager,
     RankingManager,
     RiftManager,
     SectManager,
@@ -207,6 +209,15 @@ CMD_SPIRIT_EYE_CLAIM = "抢占灵眼"
 CMD_SPIRIT_EYE_COLLECT = "灵眼收取"
 CMD_SPIRIT_EYE_RELEASE = "释放灵眼"
 
+# ===== 灵宠指令 =====
+CMD_PET_MARKET = "灵兽阁"
+CMD_PET_BUY_EGG = "购买兽蛋"
+CMD_PET_INFO = "我的灵宠"
+CMD_PET_HATCH = "孵化灵宠"
+CMD_PET_IDENTIFY = "鉴定灵宠"
+CMD_PET_EQUIP = "携带灵宠"
+CMD_PET_RELEASE = "释放灵宠"
+
 
 class XiuXianPlugin(Star):
     """修仙插件 - 文字修仙游戏"""
@@ -275,6 +286,8 @@ class XiuXianPlugin(Star):
         self.dual_cult_handlers = DualCultivationHandlers(self.db, self.dual_cult_mgr)
         self.spirit_eye_mgr = SpiritEyeManager(self.db)
         self.spirit_eye_handlers = SpiritEyeHandlers(self.db, self.spirit_eye_mgr, self.combat_handlers)
+        self.pet_mgr = PetManager(self.db)
+        self.pet_handlers = PetHandlers(self.db, self.pet_mgr)
         self.black_market_handler = BlackMarketHandler(self.db, self.config_manager)
         self.enlightenment_mgr = EnlightenmentManager(self.db)
         self.enlightenment_handlers = EnlightenmentHandlers(self.db, self.enlightenment_mgr)
@@ -1304,6 +1317,48 @@ class XiuXianPlugin(Star):
     @require_whitelist
     async def handle_spirit_eye_release(self, event: AstrMessageEvent):
         async for r in self.spirit_eye_handlers.handle_release(event):
+            yield r
+
+    @filter.command(CMD_PET_MARKET, "查看灵兽阁")
+    @require_whitelist
+    async def handle_pet_market(self, event: AstrMessageEvent):
+        async for r in self.pet_handlers.handle_market_info(event):
+            yield r
+
+    @filter.command(CMD_PET_BUY_EGG, "购买兽蛋")
+    @require_whitelist
+    async def handle_pet_buy_egg(self, event: AstrMessageEvent):
+        async for r in self.pet_handlers.handle_buy_egg(event):
+            yield r
+
+    @filter.command(CMD_PET_INFO, "查看兽栏")
+    @require_whitelist
+    async def handle_pet_info(self, event: AstrMessageEvent):
+        async for r in self.pet_handlers.handle_pet_barn(event):
+            yield r
+
+    @filter.command(CMD_PET_HATCH, "开始孵化灵宠")
+    @require_whitelist
+    async def handle_pet_hatch(self, event: AstrMessageEvent, slot_text: str = ""):
+        async for r in self.pet_handlers.handle_start_hatching(event, slot_text):
+            yield r
+
+    @filter.command(CMD_PET_IDENTIFY, "鉴定灵宠")
+    @require_whitelist
+    async def handle_pet_identify(self, event: AstrMessageEvent, slot_text: str = ""):
+        async for r in self.pet_handlers.handle_identify(event, slot_text):
+            yield r
+
+    @filter.command(CMD_PET_EQUIP, "携带灵宠出战")
+    @require_whitelist
+    async def handle_pet_equip(self, event: AstrMessageEvent, slot_text: str = ""):
+        async for r in self.pet_handlers.handle_equip(event, slot_text):
+            yield r
+
+    @filter.command(CMD_PET_RELEASE, "释放灵宠")
+    @require_whitelist
+    async def handle_pet_release(self, event: AstrMessageEvent, slot_text: str = ""):
+        async for r in self.pet_handlers.handle_release(event, slot_text):
             yield r
 
 

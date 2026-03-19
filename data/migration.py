@@ -5,7 +5,7 @@ from typing import Dict, Callable, Awaitable
 from astrbot.api import logger
 from ..config_manager import ConfigManager
 
-LATEST_DB_VERSION = 20  # v20: user_cd ??? extra_data ??
+LATEST_DB_VERSION = 21  # v20: user_cd ??? extra_data ??
 
 MIGRATION_TASKS: Dict[int, Callable[[aiosqlite.Connection, ConfigManager], Awaitable[None]]] = {}
 def migration(version: int):
@@ -519,6 +519,26 @@ async def _create_all_tables_v2(conn: aiosqlite.Connection):
     await conn.execute("CREATE INDEX IF NOT EXISTS idx_bank_trans_user ON bank_transactions(user_id)")
     await conn.execute("CREATE INDEX IF NOT EXISTS idx_bank_trans_time ON bank_transactions(created_at)")
 
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS pets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            slot_index INTEGER NOT NULL,
+            name TEXT NOT NULL DEFAULT '???????',
+            rank TEXT NOT NULL DEFAULT 'unknown',
+            state TEXT NOT NULL DEFAULT 'egg',
+            skill_1 TEXT NOT NULL DEFAULT '',
+            skill_2 TEXT NOT NULL DEFAULT '',
+            is_equipped INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL DEFAULT 0,
+            hatch_start_at INTEGER NOT NULL DEFAULT 0,
+            hatch_finish_at INTEGER NOT NULL DEFAULT 0,
+            identified_at INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(user_id, slot_index)
+        )
+    """)
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_pets_user ON pets(user_id)")
+
     logger.info("数据库表已创建完成（v2 - 完整修仙系统）")
 
 
@@ -986,3 +1006,31 @@ async def _migrate_to_v20(conn: aiosqlite.Connection, config_manager: ConfigMana
     
     await conn.commit()
     logger.info("v20迁移完成：用户CD表添加额外数据字段")
+
+
+@migration(21)
+async def _migrate_to_v21(conn: aiosqlite.Connection, config_manager: ConfigManager):
+    """???v21 - ??????"""
+    logger.info("?????v21???????")
+
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS pets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            slot_index INTEGER NOT NULL,
+            name TEXT NOT NULL DEFAULT '???????',
+            rank TEXT NOT NULL DEFAULT 'unknown',
+            state TEXT NOT NULL DEFAULT 'egg',
+            skill_1 TEXT NOT NULL DEFAULT '',
+            skill_2 TEXT NOT NULL DEFAULT '',
+            is_equipped INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL DEFAULT 0,
+            hatch_start_at INTEGER NOT NULL DEFAULT 0,
+            hatch_finish_at INTEGER NOT NULL DEFAULT 0,
+            identified_at INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(user_id, slot_index)
+        )
+    """)
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_pets_user ON pets(user_id)")
+    await conn.commit()
+    logger.info("v21?????????")

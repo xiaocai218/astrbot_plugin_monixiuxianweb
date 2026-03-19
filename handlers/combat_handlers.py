@@ -8,6 +8,7 @@ from astrbot.api.event import AstrMessageEvent
 from ..data.data_manager import DataBase
 from ..managers.battle_hp_service import BattleHpService
 from ..managers.combat_manager import CombatManager
+from ..managers.pet_battle_service import PetBattleService
 from ..models_extended import UserStatus
 
 DUEL_COOLDOWN = 300
@@ -22,6 +23,7 @@ class CombatHandlers:
         self.combat_mgr = combat_mgr
         self.config_manager = config_manager
         self.battle_hp_service = BattleHpService(db, combat_mgr, config_manager)
+        self.pet_battle_service = PetBattleService(db)
 
     async def _get_combat_cooldown(self, user_id: str) -> dict:
         try:
@@ -163,7 +165,15 @@ class CombatHandlers:
 
         p1_stats, p1_user_cd = p1_bundle
         p2_stats, p2_user_cd = p2_bundle
-        result = self.combat_mgr.player_vs_player(p1_stats, p2_stats, combat_type=2)
+        pet_context1 = await self.pet_battle_service.build_battle_context(user_id)
+        pet_context2 = await self.pet_battle_service.build_battle_context(target_id)
+        result = self.combat_mgr.player_vs_player(
+            p1_stats,
+            p2_stats,
+            combat_type=2,
+            pet_context1=pet_context1,
+            pet_context2=pet_context2,
+        )
 
         await self.db.ext.update_player_hp_mp(user_id, result["player1_final_hp"], result["player1_final_mp"])
         await self.db.ext.update_player_hp_mp(target_id, result["player2_final_hp"], result["player2_final_mp"])
@@ -238,7 +248,15 @@ class CombatHandlers:
 
         p1_stats, _ = p1_bundle
         p2_stats, _ = p2_bundle
-        result = self.combat_mgr.player_vs_player(p1_stats, p2_stats, combat_type=1)
+        pet_context1 = await self.pet_battle_service.build_battle_context(user_id)
+        pet_context2 = await self.pet_battle_service.build_battle_context(target_id)
+        result = self.combat_mgr.player_vs_player(
+            p1_stats,
+            p2_stats,
+            combat_type=1,
+            pet_context1=pet_context1,
+            pet_context2=pet_context2,
+        )
         await self._update_combat_cooldown(user_id, "spar")
 
         log = "\n".join(result["combat_log"])

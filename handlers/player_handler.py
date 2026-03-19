@@ -13,6 +13,7 @@ from ..data import DataBase
 from ..managers.battle_hp_service import BattleHpService
 from ..managers.boss_challenge_service import BossChallengeService
 from ..managers.combat_manager import CombatManager
+from ..managers.pet_manager import PetManager
 from ..models import Player
 from ..models_extended import UserStatus
 from .utils import player_required
@@ -39,6 +40,7 @@ class PlayerHandler:
         self.pill_manager = PillManager(self.db, self.config_manager)
         self.battle_hp_service = BattleHpService(self.db, CombatManager(), config_manager)
         self.boss_challenge_service = BossChallengeService(self.db)
+        self.pet_manager = PetManager(self.db)
         self.enlightenment_manager = None
 
     async def _resolve_display_battle_hp(self, player: Player):
@@ -155,6 +157,14 @@ class PlayerHandler:
         technique_name = player.main_technique if player.main_technique else "无"
         breakthrough_rate = f"+{player.level_up_rate}%" if player.level_up_rate > 0 else "0%"
         dao_hao = player.user_name if player.user_name else display_name
+        equipped_pet = await self.pet_manager.get_equipped_pet(player.user_id)
+        if equipped_pet and equipped_pet.get("state") == "active":
+            pet_rank = self.pet_manager.RANK_LABELS.get(equipped_pet.get("rank", ""), equipped_pet.get("rank", "未知"))
+            pet_skill_1 = self.pet_manager.SKILL_LABELS.get(equipped_pet.get("skill_1", ""), equipped_pet.get("skill_1", ""))
+            pet_skill_2 = self.pet_manager.SKILL_LABELS.get(equipped_pet.get("skill_2", ""), equipped_pet.get("skill_2", ""))
+            pet_name = f"{equipped_pet['name']}（{pet_rank}，{pet_skill_1}/{pet_skill_2}）"
+        else:
+            pet_name = "未携带"
 
         reply_msg = (
             f"📋 道友 {dao_hao} 的信息\n"
@@ -207,6 +217,7 @@ class PlayerHandler:
             f"  主修功法：{technique_name}\n"
             f"  法器：{weapon_name}\n"
             f"  防具：{armor_name}\n"
+            f"  灵宠：{pet_name}\n"
             "\n"
             "【宗门信息】\n"
             f"  所在宗门：{sect_name}\n"

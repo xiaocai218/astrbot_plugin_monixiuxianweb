@@ -12,6 +12,8 @@ from .enlightenment_manager import EnlightenmentManager
 from .fortune_manager import FortuneManager
 from .impart_manager import ImpartManager
 from .impart_pk_manager import ImpartPkManager
+from .pet_battle_service import PetBattleService
+from .pet_manager import PetManager
 from .ranking_manager import RankingManager
 from .rift_manager import RiftManager
 from .sect_manager import SectManager
@@ -31,6 +33,8 @@ __all__ = [
     "BankManager",
     "BountyManager",
     "ImpartPkManager",
+    "PetManager",
+    "PetBattleService",
     # Phase 4
     "BlessedLandManager",
     "SpiritFarmManager",

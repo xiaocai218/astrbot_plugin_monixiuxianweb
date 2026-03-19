@@ -18,6 +18,7 @@ from ..models_extended import Boss, UserStatus
 from .battle_hp_service import BattleHpService
 from .boss_challenge_service import BossChallengeService
 from .combat_manager import CombatManager, CombatStats
+from .pet_battle_service import PetBattleService
 
 if TYPE_CHECKING:
     from ..core import StorageRingManager
@@ -102,6 +103,7 @@ class BossManager:
         self.levels = self.config.get("levels", self.BOSS_LEVELS)
         self.battle_hp_service = BattleHpService(db, combat_mgr, config_manager)
         self.boss_challenge_service = BossChallengeService(db)
+        self.pet_battle_service = PetBattleService(db)
 
     async def _get_boss_cooldown_remaining(self, user_cd) -> int:
         extra_data = user_cd.get_extra_data()
@@ -249,7 +251,12 @@ class BossManager:
             exp=boss.stone_reward,
         )
 
-        battle_result = self.combat_mgr.player_vs_boss(player_stats, boss_stats)
+        player_pet_context = await self.pet_battle_service.build_battle_context(user_id)
+        battle_result = self.combat_mgr.player_vs_boss(
+            player_stats,
+            boss_stats,
+            player_pet_context=player_pet_context,
+        )
         winner = battle_result["winner"]
         reward = battle_result["reward"]
         final_hp = battle_result["player_final_hp"]

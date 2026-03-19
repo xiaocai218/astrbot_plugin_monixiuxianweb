@@ -17,6 +17,7 @@ from .impart_handlers import ImpartHandlers
 from .impart_pk_handlers import ImpartPkHandlers
 from .misc_handler import MiscHandler
 from .nickname_handler import NicknameHandler
+from .pet_handlers import PetHandlers
 from .pill_handler import PillHandler
 from .player_handler import PlayerHandler
 from .ranking_handlers import RankingHandlers
@@ -44,6 +45,7 @@ __all__ = [
     "AlchemyHandlers",
     "ImpartHandlers",
     "NicknameHandler",
+    "PetHandlers",
     "BankHandlers",
     "BountyHandlers",
     "ImpartPkHandlers",
