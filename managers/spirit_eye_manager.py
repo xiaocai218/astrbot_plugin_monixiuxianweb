@@ -19,8 +19,29 @@ SPIRIT_EYE_TYPES = {
 
 
 class SpiritEyeManager:
+    MIN_EYE_COUNT = 6
+    HARD_MAX_EYE_COUNT = 15
+    PLAYER_STEP = 5
+
     def __init__(self, db: DataBase):
         self.db = db
+
+    async def get_total_player_count(self) -> int:
+        async with self.db.conn.execute("SELECT COUNT(*) AS c FROM players") as cursor:
+            row = await cursor.fetchone()
+            return int(row["c"] or 0) if row else 0
+
+    async def get_total_spirit_eye_count(self) -> int:
+        async with self.db.conn.execute("SELECT COUNT(*) AS c FROM spirit_eyes") as cursor:
+            row = await cursor.fetchone()
+            return int(row["c"] or 0) if row else 0
+
+    async def get_spirit_eye_spawn_cap(self) -> Tuple[int, int, int]:
+        player_count = await self.get_total_player_count()
+        total_eyes = await self.get_total_spirit_eye_count()
+        dynamic_cap = self.MIN_EYE_COUNT + (player_count // self.PLAYER_STEP)
+        max_eyes = max(self.MIN_EYE_COUNT, min(self.HARD_MAX_EYE_COUNT, dynamic_cap))
+        return player_count, total_eyes, max_eyes
 
     async def get_user_spirit_eye(self, user_id: str) -> Optional[Dict]:
         async with self.db.conn.execute(
@@ -53,6 +74,10 @@ class SpiritEyeManager:
             return [dict(row) for row in rows]
 
     async def spawn_spirit_eye(self) -> Tuple[bool, str]:
+        player_count, total_eyes, max_eyes = await self.get_spirit_eye_spawn_cap()
+        if total_eyes >= max_eyes:
+            return False, f"\u5f53\u524d\u7075\u773c\u603b\u6570\u5df2\u8fbe\u5230\u4e0a\u9650\uff08{total_eyes}/{max_eyes}\uff09\uff0c\u672c\u8f6e\u4e0d\u518d\u751f\u6210\u65b0\u7075\u773c\u3002"
+
         roll = random.randint(1, 100)
         eye_type = 1
         cumulative = 0
@@ -71,7 +96,11 @@ class SpiritEyeManager:
             (eye_type, config["name"], config["exp_per_hour"], int(time.time())),
         )
         await self.db.conn.commit()
-        return True, f"天地间出现了一处【{config['name']}】！速来抢占！"
+        return (
+            True,
+            f"\u5929\u5730\u95f4\u51fa\u73b0\u4e86\u4e00\u5904\u3010{config['name']}\u3011\uff01\u901f\u6765\u62a2\u5360\uff01\n"
+            f"\u5f53\u524d\u7075\u773c\u603b\u6570\uff1a{total_eyes + 1}/{max_eyes}\uff08\u73a9\u5bb6\u6570\uff1a{player_count}\uff09",
+        )
 
     async def claim_spirit_eye(self, player: Player, eye_id: int) -> Tuple[bool, str]:
         existing = await self.get_user_spirit_eye(player.user_id)

@@ -14,7 +14,7 @@ class MiscHandler:
     async def handle_help(self, event: AstrMessageEvent):
         """显示修仙帮助。"""
         help_text = (
-            "\u4fee\u4ed9\u5e2e\u52a9 v3.1.66\n"
+            "\u4fee\u4ed9\u5e2e\u52a9 v3.1.82\n"
             "━━━━━━━━━━━━━━\n"
             "\n"
             "【入门基础】\n"
@@ -68,6 +68,7 @@ class MiscHandler:
             "  决斗 <@某人>\n"
             "  世界Boss\n"
             "  挑战Boss\n"
+            "  世界Boss每日可挑战3次，次日重置\n"
             "  传承挑战 <@某人>\n"
             "  传承排行\n"
             "\n"
@@ -82,6 +83,7 @@ class MiscHandler:
             "  我的灵田 / 开垦灵田 / 种植 <灵草> / 收获 / 升级灵田\n"
             "  双修 <@某人> / 接受双修 / 拒绝双修\n"
             "  灵眼信息 / 抢占灵眼 <ID> [确认] / 灵眼收取 / 释放灵眼\n"
+            "  灵眼总量随玩家数缓慢扩容：基础6个，每5名玩家+1个，最高15个\n"
             "\n"
             "【排行榜】\n"
             "  境界排行 / 战力排行 / 灵石排行\n"
@@ -90,4 +92,5 @@ class MiscHandler:
             "提示：所有指令前请加 / ，例如 /我的信息"
         )
         yield event.plain_result(help_text)
+
 

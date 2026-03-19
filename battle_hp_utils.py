@@ -6,8 +6,18 @@ BOSS_CHALLENGE_COOLDOWN_KEY = "boss_challenge_cd_until"
 BOSS_CHALLENGE_RECOVERY_KEY = "boss_challenge_hp_recovering"
 BOSS_CHALLENGE_RECOVERY_BASE_HP_KEY = "boss_challenge_hp_recovery_base_hp"
 BOSS_CHALLENGE_RECOVERY_STARTED_AT_KEY = "boss_challenge_hp_recovery_started_at"
+BOSS_DAILY_CHALLENGE_COUNT_KEY = "boss_daily_challenge_count"
+BOSS_DAILY_CHALLENGE_DATE_KEY = "boss_daily_challenge_date"
 BOSS_CHALLENGE_COOLDOWN_SECONDS = 300
 BOSS_CHALLENGE_RECOVERY_SECONDS = 600
+BATTLE_HP_STATE_KEYS = {
+    BOSS_CHALLENGE_COOLDOWN_KEY,
+    BOSS_CHALLENGE_RECOVERY_KEY,
+    BOSS_CHALLENGE_RECOVERY_BASE_HP_KEY,
+    BOSS_CHALLENGE_RECOVERY_STARTED_AT_KEY,
+    BOSS_DAILY_CHALLENGE_COUNT_KEY,
+    BOSS_DAILY_CHALLENGE_DATE_KEY,
+}
 
 
 def calculate_recovering_boss_hp(base_hp: int, max_hp: int, started_at: int, now: int | None = None) -> Tuple[int, bool]:
@@ -22,6 +32,21 @@ def calculate_recovering_boss_hp(base_hp: int, max_hp: int, started_at: int, now
 
     recovered_hp = base_hp + int((max_hp - base_hp) * elapsed / BOSS_CHALLENGE_RECOVERY_SECONDS)
     return min(max_hp, max(1, recovered_hp)), recovered_hp >= max_hp
+
+
+def merge_battle_hp_state(
+    existing_extra_data: Dict[str, Any] | None,
+    new_extra_data: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    """Preserve battle HP recovery state when other systems update user_cd extra_data."""
+    merged: Dict[str, Any] = dict(new_extra_data or {})
+
+    if existing_extra_data:
+        for key in BATTLE_HP_STATE_KEYS:
+            if key in existing_extra_data and key not in merged:
+                merged[key] = existing_extra_data[key]
+
+    return merged
 
 
 def resolve_boss_battle_hp_state(
@@ -83,3 +108,19 @@ def resolve_boss_battle_hp_state(
             changed = True
 
     return normalized_hp, recovery_enabled, cooldown_remaining, resolved_extra_data, changed
+
+
+def resolve_player_battle_hp_state(
+    current_hp: int,
+    max_hp: int,
+    extra_data: Dict[str, Any] | None,
+    now: int | None = None,
+) -> Tuple[int, int, bool, int, Dict[str, Any], bool]:
+    """Generic battle HP resolver shared by bot handlers and Web preview."""
+    hp, recovery_enabled, cooldown_remaining, resolved_extra_data, changed = resolve_boss_battle_hp_state(
+        current_hp,
+        max_hp,
+        extra_data,
+        now=now,
+    )
+    return hp, max_hp, recovery_enabled, cooldown_remaining, resolved_extra_data, changed

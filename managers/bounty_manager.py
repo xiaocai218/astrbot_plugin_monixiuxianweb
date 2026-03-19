@@ -232,7 +232,7 @@ class BountyManager:
         if cached_bounties:
             cached = next((b for b in cached_bounties if b["id"] == bounty_id), None)
         if not cached:
-            return False, "⚠️ 悬赏列表已刷新，请先发送 /悬赏令 重新查看后再接取。"
+            return False, "?? ???????????? /???? ?????????"
 
         now = int(time.time())
         time_limit = cached.get("time_limit", template.get("time_limit", 3600))
@@ -299,7 +299,7 @@ class BountyManager:
     async def check_bounty_status(self, player: Player) -> Tuple[bool, str]:
         active = await self.db.ext.get_active_bounty(player.user_id)
         if not active:
-            return False, "你当前没有进行中的悬赏任务。\n使用 /悬赏令 查看可接取的任务。"
+            return False, "??????????????\n?? /???? ?????????"
 
         rewards = json.loads(active["rewards"])
         remaining = max(0, active["expire_time"] - int(time.time()))
@@ -326,8 +326,7 @@ class BountyManager:
         try:
             active = await self.db.ext.get_active_bounty(player.user_id)
             if not active:
-                await self.db.conn.rollback()
-                return False, "你当前没有进行中的悬赏任务。"
+                return False, "??????????????"
 
             if int(time.time()) > active["expire_time"]:
                 await self.db.conn.execute(
@@ -402,7 +401,7 @@ class BountyManager:
     async def abandon_bounty(self, player: Player) -> Tuple[bool, str]:
         active = await self.db.ext.get_active_bounty(player.user_id)
         if not active:
-            return False, "你当前没有进行中的悬赏任务。"
+            return False, "??????????????\n?? /???? ?????????"
 
         await self.db.ext.cancel_bounty(player.user_id)
         abandon_cooldown = int(time.time()) + 1800
@@ -444,7 +443,6 @@ class BountyManager:
         try:
             active = await self.db.ext.get_active_bounty(player.user_id)
             if not active:
-                await self.db.conn.rollback()
                 return False, ""
 
             if int(time.time()) > active["expire_time"]:

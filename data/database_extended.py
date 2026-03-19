@@ -10,6 +10,7 @@ from typing import List, Optional
 
 import aiosqlite
 
+from ..battle_hp_utils import merge_battle_hp_state
 from ..models import Player
 from ..models_extended import Boss, BuffInfo, ImpartInfo, Rift, Sect, UserCd
 
@@ -346,13 +347,25 @@ class DatabaseExtended:
 
     async def set_user_busy(self, user_id: str, busy_type: int, scheduled_time: int = 0, extra_data: dict = None):
         """设置用户忙碌状态。"""
-        extra_json = json.dumps(extra_data or {}, ensure_ascii=False)
+        current_extra = {}
+        current_user_cd = await self.get_user_cd(user_id)
+        if current_user_cd:
+            current_extra = current_user_cd.get_extra_data()
+
+        merged_extra = merge_battle_hp_state(current_extra, extra_data)
+        extra_json = json.dumps(merged_extra, ensure_ascii=False)
+        current_time = int(time.time())
         await self.conn.execute(
             """
-            UPDATE user_cd SET type = ?, create_time = ?, scheduled_time = ?, extra_data = ?
-            WHERE user_id = ?
+            INSERT INTO user_cd (user_id, type, create_time, scheduled_time, extra_data)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                type = excluded.type,
+                create_time = excluded.create_time,
+                scheduled_time = excluded.scheduled_time,
+                extra_data = excluded.extra_data
             """,
-            (busy_type, int(time.time()), scheduled_time, extra_json, user_id),
+            (user_id, busy_type, current_time, scheduled_time, extra_json),
         )
         await self.conn.commit()
 

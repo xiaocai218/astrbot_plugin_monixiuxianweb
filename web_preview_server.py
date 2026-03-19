@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from battle_hp_utils import resolve_boss_battle_hp_state
+from battle_hp_utils import resolve_player_battle_hp_state
 
 ROOT_DIR = Path(__file__).resolve().parent
 WEB_DIR = ROOT_DIR / "webui"
@@ -33,11 +33,11 @@ NORMAL_LOAN_CAPS = [
 BREAKTHROUGH_LOAN_BUFFER = 1.3
 
 SPIRIT_FARM_HERBS = {
-    "灵草": {"grow_time": 3600, "exp_yield": 500, "gold_yield": 100, "wither_time": 172800},
-    "血灵草": {"grow_time": 7200, "exp_yield": 1500, "gold_yield": 300, "wither_time": 172800},
-    "冰心草": {"grow_time": 14400, "exp_yield": 4000, "gold_yield": 800, "wither_time": 172800},
-    "火焰花": {"grow_time": 28800, "exp_yield": 10000, "gold_yield": 2000, "wither_time": 172800},
-    "九叶灵芝": {"grow_time": 86400, "exp_yield": 30000, "gold_yield": 6000, "wither_time": 172800},
+    "\u7075\u8349": {"grow_time": 3600, "exp_yield": 500, "gold_yield": 100, "wither_time": 172800},
+    "\u8840\u7075\u8349": {"grow_time": 7200, "exp_yield": 1500, "gold_yield": 300, "wither_time": 172800},
+    "\u51b0\u5fc3\u8349": {"grow_time": 14400, "exp_yield": 4000, "gold_yield": 800, "wither_time": 172800},
+    "\u706b\u7130\u82b1": {"grow_time": 28800, "exp_yield": 10000, "gold_yield": 2000, "wither_time": 172800},
+    "\u4e5d\u53f6\u7075\u829d": {"grow_time": 86400, "exp_yield": 30000, "gold_yield": 6000, "wither_time": 172800},
 }
 FARM_LEVELS = {
     1: {"slots": 3, "upgrade_cost": 5000},
@@ -131,7 +131,7 @@ class WebPreviewRepository:
                     continue
                 index[name] = {
                     "type": str(item.get("type") or fallback_type or "other"),
-                    "rank": str(item.get("rank", "未知")),
+                        "rank": str(item.get("rank", "\u672a\u77e5")),
                     "description": str(item.get("description", "")),
                     "required_level_index": int(item.get("required_level_index", 0) or 0),
                 }
@@ -186,16 +186,29 @@ class WebPreviewRepository:
         ).fetchone()
         return row is not None
 
-    @staticmethod
-    def _resolve_boss_battle_hp_for_display(player_row: sqlite3.Row, user_cd_row: sqlite3.Row | None) -> tuple[int, int, bool, int]:
+    def _resolve_boss_battle_hp_for_display(
+        self,
+        conn: sqlite3.Connection,
+        player_row: sqlite3.Row,
+        user_cd_row: sqlite3.Row | None,
+    ) -> tuple[int, int, bool, int]:
         experience = int(player_row["experience"] or 0)
-        max_hp = max(1, experience // 2)
+        hp_buff = 0.0
+        if self._table_exists(conn, "impart_info"):
+            impart_row = conn.execute(
+                "SELECT impart_hp_per FROM impart_info WHERE user_id = ?",
+                (player_row["user_id"],),
+            ).fetchone()
+            if impart_row:
+                hp_buff = float(impart_row["impart_hp_per"] or 0.0)
+
+        max_hp = max(1, int(experience * (1 + hp_buff) // 2))
         current_hp = int(player_row["hp"] or 0)
 
         if not user_cd_row:
             return (max(1, current_hp) if current_hp > 0 else max_hp, max_hp, False, 0)
 
-        resolved_hp, recovery_enabled, cooldown_remaining, _, _ = resolve_boss_battle_hp_state(
+        resolved_hp, _, recovery_enabled, cooldown_remaining, _, _ = resolve_player_battle_hp_state(
             current_hp,
             max_hp,
             WebPreviewRepository._safe_json(user_cd_row["extra_data"], {}),
@@ -342,7 +355,11 @@ class WebPreviewRepository:
                     "SELECT extra_data FROM user_cd WHERE user_id = ?",
                     (user_id,),
                 ).fetchone()
-        battle_hp, battle_hp_max, hp_recovering, boss_cooldown_remaining = self._resolve_boss_battle_hp_for_display(player, user_cd)
+        battle_hp, battle_hp_max, hp_recovering, boss_cooldown_remaining = self._resolve_boss_battle_hp_for_display(
+            conn,
+            player,
+            user_cd,
+        )
 
         return {
             "player": {
@@ -371,10 +388,10 @@ class WebPreviewRepository:
                 "magic_damage": int(player["magic_damage"] or 0),
                 "physical_defense": int(player["physical_defense"] or 0),
                 "magic_defense": int(player["magic_defense"] or 0),
-                "weapon": player["weapon"] or "无",
-                "armor": player["armor"] or "无",
-                "main_technique": player["main_technique"] or "无",
-                "storage_ring": player["storage_ring"] or "无",
+                "weapon": player["weapon"] or "\u65e0",
+                "armor": player["armor"] or "\u65e0",
+                "main_technique": player["main_technique"] or "\u65e0",
+                "storage_ring": player["storage_ring"] or "\u65e0",
                 "sect_name": sect_name,
                 "combat_power": self._power_score(player),
                 "pill_count": total_count(pills_inventory),
@@ -420,9 +437,9 @@ class WebPreviewRepository:
                     continue
                 result.append(
                     {
-                        "name": str(item.get("name", "未知物品")),
+                        "name": str(item.get("name", "\u672a\u77e5\u7269\u54c1")),
                         "type": str(item.get("type") or fallback_type or ""),
-                        "rank": str(item.get("rank", "未知")),
+                        "rank": str(item.get("rank", "\u672a\u77e5")),
                         "price": int(item.get("price", 0) or 0),
                         "required_level_index": int(item.get("required_level_index", 0) or 0),
                         "description": str(item.get("description", "")),
@@ -449,7 +466,7 @@ class WebPreviewRepository:
                 [
                     item
                     for item in treasure
-                    if item["type"] in {"material", "main_technique", "technique", "legacy_pill", "功法", "丹药"}
+                    if item["type"] in {"material", "main_technique", "technique", "legacy_pill", "\u529f\u6cd5", "\u4e39\u836f"}
                 ]
             ),
         }
@@ -593,7 +610,11 @@ class WebPreviewRepository:
             }
 
         if player:
-            battle_hp, battle_hp_max, hp_recovering, cooldown_remaining = self._resolve_boss_battle_hp_for_display(player, user_cd)
+            battle_hp, battle_hp_max, hp_recovering, cooldown_remaining = self._resolve_boss_battle_hp_for_display(
+                conn,
+                player,
+                user_cd,
+            )
             player_status = {
                 "name": player["user_name"] or player["user_id"],
                 "battle_hp": battle_hp,
@@ -603,7 +624,7 @@ class WebPreviewRepository:
                 "cooldown_remaining_seconds": cooldown_remaining % 60,
                 "cooldown_remaining": cooldown_remaining,
                 "hp_recovering": hp_recovering,
-                "recovery_desc": "每分钟恢复10%，约10分钟恢复满血" if hp_recovering else "当前战斗HP已恢复完成",
+                "recovery_desc": "\u6bcf\u5206\u949f\u6062\u590d10%\uff0c\u7ea610\u5206\u949f\u6062\u590d\u6ee1\u8840" if hp_recovering else "\u5f53\u524d\u6218\u6597HP\u5df2\u6062\u590d\u5b8c\u6210",
                 "can_challenge": cooldown_remaining <= 0,
             }
 
@@ -622,11 +643,11 @@ class WebPreviewRepository:
             "next_spawn_in_minutes": next_spawn_in_minutes,
             "enrage_threshold_percent": 30,
             "enrage_skills": [
-                {"name": "回血", "desc": "5回合内每回合在玩家出手前恢复15%-20%最大生命"},
-                {"name": "暴怒", "desc": "5回合内攻击额外提升200%，即按3倍攻击结算"},
-                {"name": "石化", "desc": "5回合内按90%到50%递减减伤，并反弹玩家造成的实际伤害"},
-                {"name": "闪避", "desc": "5回合内拥有50%闪避概率"},
-                {"name": "咆哮", "desc": "玩家3回合内因恐惧无法造成伤害，但同时拥有30%闪避"},
+                {"name": "\u56de\u8840", "desc": "5\u56de\u5408\u5185\u6bcf\u56de\u5408\u5728\u73a9\u5bb6\u51fa\u624b\u524d\u6062\u590d15%-20%\u6700\u5927\u751f\u547d"},
+                {"name": "\u66b4\u6012", "desc": "5\u56de\u5408\u5185\u653b\u51fb\u989d\u5916\u63d0\u5347200%\uff0c\u5373\u63093\u500d\u653b\u51fb\u7ed3\u7b97"},
+                {"name": "\u77f3\u5316", "desc": "5\u56de\u5408\u5185\u630990%\u523050%\u9012\u51cf\u51cf\u4f24\uff0c\u5e76\u53cd\u5f39\u73a9\u5bb6\u9020\u6210\u7684\u5b9e\u9645\u4f24\u5bb3"},
+                {"name": "\u95ea\u907f", "desc": "5\u56de\u5408\u5185\u62e5\u670950%\u95ea\u907f\u6982\u7387"},
+                {"name": "\u5486\u54ee", "desc": "\u73a9\u5bb63\u56de\u5408\u5185\u56e0\u6050\u60e7\u65e0\u6cd5\u9020\u6210\u4f24\u5bb3\uff0c\u4f46\u540c\u65f6\u62e5\u670930%\u95ea\u907f"},
             ],
             "player_status": player_status,
         }
@@ -734,11 +755,11 @@ class WebPreviewRepository:
 
     def get_blessed_land_preview(self, user_id: str) -> dict[str, Any]:
         prices = {
-            1: ("小洞天", 10_000),
-            2: ("中洞天", 50_000),
-            3: ("大洞天", 200_000),
-            4: ("福地", 500_000),
-            5: ("洞天福地", 1_000_000),
+            1: ("\u5c0f\u6d1e\u5929", 10_000),
+            2: ("\u4e2d\u6d1e\u5929", 50_000),
+            3: ("\u5927\u6d1e\u5929", 200_000),
+            4: ("\u798f\u5730", 500_000),
+            5: ("\u6d1e\u5929\u798f\u5730", 1_000_000),
         }
 
         with self._connect() as conn:
@@ -750,7 +771,7 @@ class WebPreviewRepository:
                         for land_type, (name, price) in prices.items()
                     ],
                     "replace_credit_rate": 0.6,
-                    "empty_state": "当前数据库中还没有洞天表数据。",
+                    "empty_state": "\u5f53\u524d\u6570\u636e\u5e93\u4e2d\u8fd8\u6ca1\u6709\u6d1e\u5929\u8868\u6570\u636e\u3002",
                 }
 
             row = conn.execute(
@@ -780,7 +801,7 @@ class WebPreviewRepository:
                 for land_type, (name, price) in prices.items()
             ],
             "replace_credit_rate": 0.6,
-            "empty_state": "当前玩家还没有洞天，可通过 Bot 指令购买后再回来查看。",
+            "empty_state": "\u5f53\u524d\u73a9\u5bb6\u8fd8\u6ca1\u6709\u6d1e\u5929\uff0c\u53ef\u901a\u8fc7 Bot \u6307\u4ee4\u8d2d\u4e70\u540e\u518d\u56de\u6765\u67e5\u770b\u3002",
         }
 
     def get_adventure_preview(self, user_id: str) -> dict[str, Any]:
@@ -1206,7 +1227,7 @@ class WebPreviewRepository:
             available.append(
                 {
                     "id": int(item.get("id", 0) or 0),
-                    "name": str(item.get("name", "\u672a\u77e5\u60ac\u8d4f")),
+                        "name": str(item.get("name", "\u672a\u77e5\u7269\u54c1")),
                     "category": str(item.get("category", "\u672a\u77e5\u5206\u7c7b")),
                     "difficulty": diff_key,
                     "difficulty_name": str(diff_cfg.get("name", diff_key or "\u672a\u77e5\u96be\u5ea6")),

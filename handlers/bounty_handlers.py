@@ -19,7 +19,7 @@ class BountyHandlers:
     async def handle_bounty_list(self, player: Player, event: AstrMessageEvent):
         bounties = await self.bounty_mgr.get_bounty_list(player)
 
-        lines = ["📜 悬赏令 · 今日委托", "━━━━━━━━━━━━━━━"]
+        lines = ["📜 悬赏任务 · 今日委托", "━━━━━━━━━━━━━━━"]
         for bounty in bounties:
             reward = bounty.get("reward", {})
             lines.append(
