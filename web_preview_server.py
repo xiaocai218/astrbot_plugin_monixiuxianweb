@@ -9,7 +9,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from battle_hp_utils import resolve_player_battle_hp_state
+try:
+    from .battle_hp_utils import resolve_player_battle_hp_state
+except ImportError:
+    from battle_hp_utils import resolve_player_battle_hp_state
 
 ROOT_DIR = Path(__file__).resolve().parent
 WEB_DIR = ROOT_DIR / "webui"
@@ -59,6 +62,7 @@ def load_web_server_config() -> dict[str, Any]:
     config = load_json_file(CONFIG_DIR / "game_config.json", {})
     web_config = config.get("web_server", {}) if isinstance(config, dict) else {}
 
+    enabled = bool(web_config.get("enabled", False))
     host = str(web_config.get("host", "0.0.0.0") or "0.0.0.0")
     try:
         port = int(web_config.get("port", 8765) or 8765)
@@ -66,6 +70,7 @@ def load_web_server_config() -> dict[str, Any]:
         port = 8765
 
     return {
+        "enabled": enabled,
         "host": host,
         "port": port,
     }

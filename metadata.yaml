@@ -1,6 +1,6 @@
 name: astrbot_plugin_monixiuxian2
 display_name: 模拟修仙v2
-desc: 一款为 AstrBot 设计的文字修仙插件，包含修炼、突破、Boss、历练、宗门、洞天、灵田、灵宠、银行与多种互动玩法。
-version: v3.2.24
+desc: 一款运行在 AstrBot 中的文字修仙插件，包含修炼、突破、Boss、历练、宗门、洞天、灵田、灵宠、银行与多种互动玩法。
+version: v3.2.27
 author: xiaojuwa
 repo: https://github.com/xiaojuwa/astrbot_plugin_monixiuxian2

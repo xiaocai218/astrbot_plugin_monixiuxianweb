@@ -65,6 +65,7 @@ from .managers import (
     SpiritEyeManager,
     SpiritFarmManager,
 )
+from .web import WebPreviewService
 
 
 def require_whitelist(func):
@@ -320,6 +321,7 @@ class XiuXianPlugin(Star):
         self.loan_check_task = None # 贷款逾期检查任务
         self.spirit_eye_task = None # 灵眼生成任务
         self.bounty_check_task = None  # 悬赏过期检查任务
+        self.web_preview_service = None  # 插件内置只读 Web 预览
 
         access_control_config = self.config.get("ACCESS_CONTROL", {})
         self.whitelist_groups = [str(g) for g in access_control_config.get("WHITELIST_GROUPS", [])]
@@ -379,6 +381,15 @@ class XiuXianPlugin(Star):
         self.spirit_eye_task = asyncio.create_task(self._schedule_spirit_eye_spawn())
         self.bounty_check_task = asyncio.create_task(self._schedule_bounty_check())
         
+        try:
+            web_service, enabled = WebPreviewService.from_config(self.db.db_path)
+            if enabled:
+                web_service.start()
+                self.web_preview_service = web_service
+        except Exception as exc:
+            self.web_preview_service = None
+            logger.error(f"【修仙插件】只读 Web 预览启动失败：{exc}")
+        
         logger.info("【修仙插件】已加载。")
 
     async def terminate(self):
@@ -390,6 +401,8 @@ class XiuXianPlugin(Star):
             self.spirit_eye_task.cancel()
         if self.bounty_check_task:
             self.bounty_check_task.cancel()
+        if self.web_preview_service:
+            self.web_preview_service.stop()
         await self.db.close()
         logger.info("【修仙插件】已卸载。")
         
