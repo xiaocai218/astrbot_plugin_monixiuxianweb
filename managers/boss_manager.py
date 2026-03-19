@@ -18,6 +18,7 @@ from ..models_extended import Boss, UserStatus
 from .battle_hp_service import BattleHpService
 from .boss_challenge_service import BossChallengeService
 from .combat_manager import CombatManager, CombatStats
+from .combat_resource_service import CombatResourceService
 from .pet_battle_service import PetBattleService
 
 if TYPE_CHECKING:
@@ -103,6 +104,7 @@ class BossManager:
         self.levels = self.config.get("levels", self.BOSS_LEVELS)
         self.battle_hp_service = BattleHpService(db, combat_mgr, config_manager)
         self.boss_challenge_service = BossChallengeService(db)
+        self.combat_resource_service = CombatResourceService(db)
         self.pet_battle_service = PetBattleService(db)
 
     async def _get_boss_cooldown_remaining(self, user_cd) -> int:
@@ -235,6 +237,10 @@ class BossManager:
                 ),
                 None,
             )
+
+        ok, resource_msg, _cost = await self.combat_resource_service.consume_entry_cost(player, "boss")
+        if not ok:
+            return False, resource_msg, None
 
         used_count, remaining_count = await self._consume_daily_boss_challenge(user_cd)
 

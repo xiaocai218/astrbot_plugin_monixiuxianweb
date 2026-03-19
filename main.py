@@ -347,6 +347,10 @@ class XiuXianPlugin(Star):
         
         # 确保系统配置表存在
         await self.db.ext.ensure_system_config_table()
+        # 兼容旧数据库：确保银行表在贷款后台任务启动前已补齐
+        await self.db.ext.ensure_bank_tables()
+        # 兼容旧数据库：确保悬赏表在后台任务启动前已补齐
+        await self.db.ext.ensure_bounty_tables()
         
         # 启动定时任务
         self.boss_task = asyncio.create_task(self._schedule_boss_spawn())

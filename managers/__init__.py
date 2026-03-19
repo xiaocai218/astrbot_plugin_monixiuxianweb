@@ -7,6 +7,7 @@ from .blessed_land_manager import BlessedLandManager
 from .boss_manager import BossManager
 from .bounty_manager import BountyManager
 from .combat_manager import CombatManager, CombatStats
+from .combat_resource_service import CombatResourceService
 from .dual_cultivation_manager import DualCultivationManager
 from .enlightenment_manager import EnlightenmentManager
 from .fortune_manager import FortuneManager
@@ -23,6 +24,7 @@ from .spirit_farm_manager import SpiritFarmManager
 __all__ = [
     "CombatManager",
     "CombatStats",
+    "CombatResourceService",
     "SectManager",
     "BossManager",
     "RiftManager",

@@ -62,8 +62,13 @@ class BankManager:
             "BREAKTHROUGH_LOAN_BUFFER", DEFAULT_BREAKTHROUGH_LOAN_BUFFER
         )
 
+    async def ensure_tables(self):
+        """确保银行相关数据表存在。"""
+        await self.db.ext.ensure_bank_tables()
+
     async def get_bank_info(self, player: Player) -> dict:
         """获取银行账户信息。"""
+        await self.ensure_tables()
         bank_data = await self.db.ext.get_bank_account(player.user_id)
         if not bank_data:
             bank_info = {"balance": 0, "last_interest_time": 0, "pending_interest": 0}
@@ -123,6 +128,7 @@ class BankManager:
 
     async def get_loan_limits(self, player: Player) -> dict:
         """获取当前玩家可申请的贷款额度信息。"""
+        await self.ensure_tables()
         bank_data = await self.db.ext.get_bank_account(player.user_id)
         bank_balance = bank_data["balance"] if bank_data else 0
         total_assets = max(0, int(player.gold)) + max(0, int(bank_balance))
@@ -152,11 +158,14 @@ class BankManager:
 
     async def deposit(self, player: Player, amount: int) -> Tuple[bool, str]:
         """存入灵石。"""
+        await self.ensure_tables()
         if amount <= 0:
             return False, "存款金额必须大于 0。"
 
+        await self.ensure_tables()
         await self.db.conn.execute("BEGIN IMMEDIATE")
         try:
+            await self.ensure_tables()
             player = await self.db.get_player_by_id(player.user_id)
             if player.gold < amount:
                 await self.db.conn.rollback()
@@ -187,6 +196,7 @@ class BankManager:
 
     async def withdraw(self, player: Player, amount: int) -> Tuple[bool, str]:
         """取出灵石。"""
+        await self.ensure_tables()
         if amount <= 0:
             return False, "取款金额必须大于 0。"
 
@@ -218,6 +228,7 @@ class BankManager:
 
     async def claim_interest(self, player: Player) -> Tuple[bool, str]:
         """领取利息。"""
+        await self.ensure_tables()
         bank_data = await self.db.ext.get_bank_account(player.user_id)
         if not bank_data or bank_data["balance"] <= 0:
             return False, "你还没有存款，无法领取利息。"
@@ -234,6 +245,7 @@ class BankManager:
 
     async def get_loan_info(self, player: Player) -> Optional[dict]:
         """获取贷款详情。"""
+        await self.ensure_tables()
         loan = await self.db.ext.get_active_loan(player.user_id)
         if not loan:
             return None
@@ -255,6 +267,7 @@ class BankManager:
 
     async def borrow(self, player: Player, amount: int, loan_type: str = "normal") -> Tuple[bool, str]:
         """申请贷款。"""
+        await self.ensure_tables()
         if amount < self.min_loan_amount:
             return False, f"最小贷款金额为 {self.min_loan_amount:,} 灵石。"
 
@@ -277,6 +290,7 @@ class BankManager:
                 extra_lines.append(f"当前突破丹参考价格：{limits['breakthrough_pill_price']:,} 灵石")
             return False, "申请金额超出当前可贷款额度。\n" + "\n".join(extra_lines)
 
+        await self.ensure_tables()
         await self.db.conn.execute("BEGIN IMMEDIATE")
         try:
             player = await self.db.get_player_by_id(player.user_id)
@@ -380,6 +394,7 @@ class BankManager:
 
     async def check_and_process_overdue_loans(self) -> List[dict]:
         """检查并处理逾期贷款。"""
+        await self.ensure_tables()
         now = int(time.time())
         overdue_loans = await self.db.ext.get_overdue_loans(now)
         processed = []

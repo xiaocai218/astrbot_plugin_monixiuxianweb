@@ -62,6 +62,16 @@ class BountyManager:
         self.adventure_tag_meta: Dict[str, Dict[str, int]] = {}
         self.reload_config()
 
+    async def _expire_active_bounty(self, user_id: str):
+        await self.db.conn.execute(
+            "UPDATE bounty_tasks SET status = 3 WHERE user_id = ? AND status = 1",
+            (user_id,),
+        )
+
+    async def ensure_tables(self):
+        """确保悬赏相关数据表存在。"""
+        await self.db.ext.ensure_bounty_tables()
+
     def reload_config(self):
         config = self._load_config_file()
         self.difficulties = config.get("difficulties", self.DEFAULT_CONFIG["difficulties"])
@@ -290,6 +300,11 @@ class BountyManager:
         if not active:
             return False, "当前没有进行中的悬赏任务。\n请输入 /悬赏任务 查看今日委托。"
 
+        if int(time.time()) > active["expire_time"]:
+            await self._expire_active_bounty(player.user_id)
+            await self.db.conn.commit()
+            return False, "这份悬赏已经超时失效，请重新发送 /悬赏任务 查看今日委托。"
+
         rewards = json.loads(active["rewards"])
         remaining = max(0, active["expire_time"] - int(time.time()))
         progress = active.get("current_progress", 0)
@@ -319,7 +334,7 @@ class BountyManager:
 
             if int(time.time()) > active["expire_time"]:
                 await self.db.conn.execute(
-                    "UPDATE bounty_tasks SET status = 0 WHERE user_id = ? AND status = 1",
+                    "UPDATE bounty_tasks SET status = 3 WHERE user_id = ? AND status = 1",
                     (player.user_id,),
                 )
                 await self.db.conn.commit()
@@ -410,7 +425,8 @@ class BountyManager:
                 return False, ""
 
             if int(time.time()) > active["expire_time"]:
-                await self.db.conn.rollback()
+                await self._expire_active_bounty(player.user_id)
+                await self.db.conn.commit()
                 return False, ""
 
             try:
@@ -449,6 +465,7 @@ class BountyManager:
             raise
 
     async def check_and_expire_bounties(self) -> int:
+        await self.ensure_tables()
         now = int(time.time())
         cursor = await self.db.conn.execute(
             "UPDATE bounty_tasks SET status = 3 WHERE status = 1 AND expire_time < ?",

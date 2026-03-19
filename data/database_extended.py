@@ -210,6 +210,7 @@ class DatabaseExtended:
 
     async def get_active_boss(self) -> Optional[Boss]:
         """获取当前存活 Boss。"""
+        await self.ensure_bank_tables()
         async with self.conn.execute(
             "SELECT * FROM boss WHERE status = 1 ORDER BY create_time DESC LIMIT 1"
         ) as cursor:
@@ -463,12 +464,161 @@ class DatabaseExtended:
             """
         )
         await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_bounty_user ON bounty_tasks(user_id)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_bounty_status_expire ON bounty_tasks(status, expire_time)")
+        await self._repair_legacy_bounty_tasks()
+        await self.conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_bounty_active_unique
+            ON bounty_tasks(user_id)
+            WHERE status = 1
+            """
+        )
         await self.conn.commit()
+
+    async def _repair_legacy_bounty_tasks(self):
+        """修复历史脏数据，确保每位玩家最多只有一条进行中的悬赏。"""
+        async with self.conn.execute(
+            """
+            SELECT user_id
+            FROM bounty_tasks
+            WHERE status = 1
+            GROUP BY user_id
+            HAVING COUNT(*) > 1
+            """
+        ) as cursor:
+            duplicate_users = [row[0] async for row in cursor]
+
+        for user_id in duplicate_users:
+            async with self.conn.execute(
+                """
+                SELECT id
+                FROM bounty_tasks
+                WHERE user_id = ? AND status = 1
+                ORDER BY start_time DESC, id DESC
+                """,
+                (user_id,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+
+            if len(rows) <= 1:
+                continue
+
+            stale_ids = [row[0] for row in rows[1:]]
+            placeholders = ",".join("?" for _ in stale_ids)
+            await self.conn.execute(
+                f"UPDATE bounty_tasks SET status = 3 WHERE id IN ({placeholders})",
+                tuple(stale_ids),
+            )
+
+    async def ensure_bank_tables(self):
+        """确保银行相关数据表存在。"""
+        await self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bank_accounts (
+                user_id TEXT PRIMARY KEY,
+                balance INTEGER NOT NULL DEFAULT 0,
+                last_interest_time INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        await self._repair_legacy_bank_loans_schema()
+        await self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bank_loans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                principal INTEGER NOT NULL,
+                interest_rate REAL NOT NULL,
+                borrowed_at INTEGER NOT NULL,
+                due_at INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                loan_type TEXT NOT NULL DEFAULT 'normal'
+            )
+            """
+        )
+        await self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bank_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                trans_type TEXT NOT NULL,
+                amount INTEGER NOT NULL,
+                balance_after INTEGER NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL
+            )
+            """
+        )
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_bank_loans_user ON bank_loans(user_id, status)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_bank_loans_due ON bank_loans(status, due_at)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_bank_trans_user ON bank_transactions(user_id, created_at DESC)")
+        await self.conn.commit()
+
+    async def _repair_legacy_bank_loans_schema(self):
+        """修复旧版 bank_loans 上错误的唯一约束。"""
+        async with self.conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bank_loans'"
+        ) as cursor:
+            row = await cursor.fetchone()
+
+        if not row or not row[0]:
+            return
+
+        normalized_sql = "".join(str(row[0]).lower().split())
+        needs_rebuild = "unique(user_id,status)" in normalized_sql
+
+        if not needs_rebuild:
+            async with self.conn.execute("PRAGMA index_list(bank_loans)") as cursor:
+                indexes = await cursor.fetchall()
+            for index_row in indexes:
+                if not bool(index_row[2]):
+                    continue
+                index_name = index_row[1]
+                async with self.conn.execute(f"PRAGMA index_info({index_name})") as cursor:
+                    columns = [info_row[2] async for info_row in cursor]
+                if columns == ["user_id", "status"]:
+                    needs_rebuild = True
+                    break
+
+        if not needs_rebuild:
+            return
+
+        await self.conn.execute("DROP TABLE IF EXISTS bank_loans_new")
+        await self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bank_loans_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                principal INTEGER NOT NULL,
+                interest_rate REAL NOT NULL,
+                borrowed_at INTEGER NOT NULL,
+                due_at INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                loan_type TEXT NOT NULL DEFAULT 'normal'
+            )
+            """
+        )
+        await self.conn.execute(
+            """
+            INSERT INTO bank_loans_new (
+                id, user_id, principal, interest_rate, borrowed_at, due_at, status, loan_type
+            )
+            SELECT id, user_id, principal, interest_rate, borrowed_at, due_at, status, loan_type
+            FROM bank_loans
+            """
+        )
+        await self.conn.execute("DROP TABLE bank_loans")
+        await self.conn.execute("ALTER TABLE bank_loans_new RENAME TO bank_loans")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_bank_loans_user ON bank_loans(user_id, status)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_bank_loans_due ON bank_loans(status, due_at)")
 
     async def get_active_bounty(self, user_id: str) -> Optional[dict]:
         """获取当前进行中的悬赏。"""
         await self.ensure_bounty_tables()
-        async with self.conn.execute("SELECT * FROM bounty_tasks WHERE user_id = ? AND status = 1", (user_id,)) as cursor:
+        async with self.conn.execute(
+            "SELECT * FROM bounty_tasks WHERE user_id = ? AND status = 1 ORDER BY start_time DESC, id DESC LIMIT 1",
+            (user_id,),
+        ) as cursor:
             row = await cursor.fetchone()
         return dict(row) if row else None
 

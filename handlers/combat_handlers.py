@@ -8,6 +8,7 @@ from astrbot.api.event import AstrMessageEvent
 from ..data.data_manager import DataBase
 from ..managers.battle_hp_service import BattleHpService
 from ..managers.combat_manager import CombatManager
+from ..managers.combat_resource_service import CombatResourceService
 from ..managers.pet_battle_service import PetBattleService
 from ..models_extended import UserStatus
 
@@ -23,6 +24,7 @@ class CombatHandlers:
         self.combat_mgr = combat_mgr
         self.config_manager = config_manager
         self.battle_hp_service = BattleHpService(db, combat_mgr, config_manager)
+        self.combat_resource_service = CombatResourceService(db)
         self.pet_battle_service = PetBattleService(db)
 
     async def _get_combat_cooldown(self, user_id: str) -> dict:
@@ -156,6 +158,13 @@ class CombatHandlers:
             remaining = DUEL_COOLDOWN - (now - last_duel)
             return False, f"决斗冷却中，还需 {remaining // 60} 分 {remaining % 60} 秒。", None
 
+        challenger = await self.db.get_player_by_id(user_id)
+        if not challenger:
+            return False, "你还未踏入修仙之路。", None
+        ok, resource_msg, _cost = await self.combat_resource_service.consume_entry_cost(challenger, "duel")
+        if not ok:
+            return False, resource_msg, None
+
         p1_bundle = await self._prepare_combat_stats(user_id)
         p2_bundle = await self._prepare_combat_stats(target_id)
         if not p1_bundle:
@@ -238,6 +247,15 @@ class CombatHandlers:
         if last_spar and (now - last_spar) < SPAR_COOLDOWN:
             remaining = SPAR_COOLDOWN - (now - last_spar)
             yield event.plain_result(f"切磋冷却中，还需 {remaining} 秒。")
+            return
+
+        challenger = await self.db.get_player_by_id(user_id)
+        if not challenger:
+            yield event.plain_result("你还未踏入修仙之路。")
+            return
+        ok, resource_msg, _cost = await self.combat_resource_service.consume_entry_cost(challenger, "spar")
+        if not ok:
+            yield event.plain_result(resource_msg)
             return
 
         p1_bundle = await self._prepare_combat_stats(user_id)

@@ -56,6 +56,18 @@ class PlayerHandler:
             return UserStatus.get_name(user_cd.type)
         return player.state or "空闲"
 
+    async def _get_cultivation_state(self, player: Player):
+        user_cd = await self.db.ext.get_user_cd(player.user_id)
+        player_cultivating = player.state == "淇偧涓?"
+        cd_cultivating = bool(user_cd and user_cd.type == UserStatus.CULTIVATING)
+        return user_cd, player_cultivating, cd_cultivating
+
+    async def _clear_cultivation_state(self, player: Player):
+        player.state = "绌洪棽"
+        player.cultivation_start_time = 0
+        await self.db.update_player(player)
+        await self.db.ext.set_user_free(player.user_id)
+
     async def _get_pet_display_name(self, user_id: str) -> str:
         equipped_pet = await self.pet_manager.get_equipped_pet(user_id)
         if not equipped_pet or equipped_pet.get("state") != "active":
@@ -315,6 +327,13 @@ class PlayerHandler:
 
     @player_required
     async def handle_start_cultivation(self, player: Player, event: AstrMessageEvent):
+        user_cd, player_cultivating, cd_cultivating = await self._get_cultivation_state(player)
+        if player_cultivating and not cd_cultivating and player.cultivation_start_time == 0:
+            await self._clear_cultivation_state(player)
+            user_cd, player_cultivating, cd_cultivating = await self._get_cultivation_state(player)
+        if player_cultivating or cd_cultivating:
+            yield event.plain_result("道友已在闭关中，请勿重复进入。")
+            return
         """开始闭关。"""
         if player.state == "修炼中":
             yield event.plain_result("道友已在闭关中，请勿重复进入。")
@@ -340,6 +359,18 @@ class PlayerHandler:
 
     @player_required
     async def handle_end_cultivation(self, player: Player, event: AstrMessageEvent):
+        user_cd, player_cultivating, cd_cultivating = await self._get_cultivation_state(player)
+        if cd_cultivating and not player_cultivating:
+            player.state = "修炼中"
+            await self.db.update_player(player)
+            player_cultivating = True
+        if not (player_cultivating or cd_cultivating):
+            yield event.plain_result("道友当前并未闭关，无需出关。")
+            return
+        if player.cultivation_start_time == 0:
+            await self._clear_cultivation_state(player)
+            yield event.plain_result("检测到闭关状态残留但未记录开始时间，已自动清理异常闭关状态。")
+            return
         """结束闭关。"""
         if player.state != "修炼中":
             yield event.plain_result("道友当前并未闭关，无需出关。")
@@ -396,6 +427,7 @@ class PlayerHandler:
                 enlightenment_msg = f"\n\n{msg}"
 
         player.experience += gained_exp
+        await self._clear_cultivation_state(player)
         player.state = "空闲"
         player.cultivation_start_time = 0
         await self.db.update_player(player)

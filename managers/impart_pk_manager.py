@@ -8,6 +8,7 @@ from ..models import Player
 from ..models_extended import UserStatus
 from .battle_hp_service import BattleHpService
 from .combat_manager import CombatManager
+from .combat_resource_service import CombatResourceService
 from .pet_battle_service import PetBattleService
 
 __all__ = ["ImpartPkManager"]
@@ -20,6 +21,7 @@ class ImpartPkManager:
         self.db = db
         self.combat_mgr = combat_mgr
         self.battle_hp_service = BattleHpService(db, combat_mgr)
+        self.combat_resource_service = CombatResourceService(db)
         self.pet_battle_service = PetBattleService(db)
 
     async def _get_or_create_user_cd(self, user_id: str):
@@ -41,6 +43,10 @@ class ImpartPkManager:
             return False, "你当前正忙，无法发起传承挑战。", {}
         if defender_cd.type != UserStatus.IDLE:
             return False, "对方当前正忙，无法进行传承挑战。", {}
+
+        ok, resource_msg, _cost = await self.combat_resource_service.consume_entry_cost(attacker, "impart")
+        if not ok:
+            return False, resource_msg, {}
 
         attacker_impart = await self.db.ext.get_impart_info(attacker.user_id)
         defender_impart = await self.db.ext.get_impart_info(defender.user_id)
