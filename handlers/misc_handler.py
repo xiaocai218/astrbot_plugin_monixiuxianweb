@@ -14,7 +14,7 @@ class MiscHandler:
     async def handle_help(self, event: AstrMessageEvent):
         """显示修仙帮助。"""
         help_text = (
-            "\u4fee\u4ed9\u5e2e\u52a9 v3.2.14\n"
+            "\u4fee\u4ed9\u5e2e\u52a9 v3.2.17\n"
             "━━━━━━━━━━━━━━\n"
             "\n"
             "【入门基础】\n"
@@ -69,9 +69,12 @@ class MiscHandler:
             "【战斗竞技】\n"
             "  切磋 <@某人>\n"
             "  决斗 <@某人>\n"
+            "  接受决斗 / 拒绝决斗\n"
             "  世界Boss\n"
             "  挑战Boss\n"
-            "  世界Boss每日可挑战3次，次日重置\n"
+            "  世界Boss每日可挑战4次，次日重置\n"
+            "  切磋可直接开始，用于战力评估，不消耗资源\n"
+            "  决斗改为请求制，对方接受后才会正式开打\n"
             "  传承挑战 <@某人>\n"
             "  传承排行\n"
             "\n"

@@ -68,6 +68,12 @@ class BountyManager:
             (user_id,),
         )
 
+    async def _expire_bounty_task(self, task_id: int):
+        await self.db.conn.execute(
+            "UPDATE bounty_tasks SET status = 3 WHERE id = ?",
+            (task_id,),
+        )
+
     async def ensure_tables(self):
         """确保悬赏相关数据表存在。"""
         await self.db.ext.ensure_bounty_tables()
@@ -301,7 +307,7 @@ class BountyManager:
             return False, "当前没有进行中的悬赏任务。\n请输入 /悬赏任务 查看今日委托。"
 
         if int(time.time()) > active["expire_time"]:
-            await self._expire_active_bounty(player.user_id)
+            await self._expire_bounty_task(active["id"])
             await self.db.conn.commit()
             return False, "这份悬赏已经超时失效，请重新发送 /悬赏任务 查看今日委托。"
 
@@ -334,8 +340,8 @@ class BountyManager:
 
             if int(time.time()) > active["expire_time"]:
                 await self.db.conn.execute(
-                    "UPDATE bounty_tasks SET status = 3 WHERE user_id = ? AND status = 1",
-                    (player.user_id,),
+                    "UPDATE bounty_tasks SET status = 3 WHERE id = ?",
+                    (active["id"],),
                 )
                 await self.db.conn.commit()
                 return False, "这份悬赏已经超时失效。"
@@ -356,8 +362,8 @@ class BountyManager:
             exp_reward = rewards.get("exp", 0)
 
             await self.db.conn.execute(
-                "UPDATE bounty_tasks SET status = 2 WHERE user_id = ? AND status = 1",
-                (player.user_id,),
+                "UPDATE bounty_tasks SET status = 2 WHERE id = ?",
+                (active["id"],),
             )
 
             max_value = 2**63 - 1
@@ -384,7 +390,7 @@ class BountyManager:
         if not active:
             return False, "当前没有进行中的悬赏任务。\n请输入 /悬赏任务 查看今日委托。"
 
-        await self.db.ext.cancel_bounty(player.user_id)
+        await self.db.ext.cancel_bounty_by_id(active["id"])
         abandon_cooldown = int(time.time()) + 1800
         await self.db.ext.set_system_config(f"bounty_abandon_cd_{player.user_id}", str(abandon_cooldown))
         return True, f"你已放弃悬赏【{active['bounty_name']}】。\n30 分钟内无法再次接取悬赏。"
@@ -425,7 +431,7 @@ class BountyManager:
                 return False, ""
 
             if int(time.time()) > active["expire_time"]:
-                await self._expire_active_bounty(player.user_id)
+                await self._expire_bounty_task(active["id"])
                 await self.db.conn.commit()
                 return False, ""
 
@@ -452,8 +458,8 @@ class BountyManager:
 
             new_progress = min(target, progress + count)
             await self.db.conn.execute(
-                "UPDATE bounty_tasks SET current_progress = ? WHERE user_id = ? AND status = 1 AND current_progress = ?",
-                (new_progress, player.user_id, progress),
+                "UPDATE bounty_tasks SET current_progress = ? WHERE id = ? AND current_progress = ?",
+                (new_progress, active["id"], progress),
             )
             await self.db.conn.commit()
 

@@ -664,6 +664,22 @@ class DatabaseExtended:
         await self.conn.execute("UPDATE bounty_tasks SET status = 0 WHERE user_id = ? AND status = 1", (user_id,))
         await self.conn.commit()
 
+    async def complete_bounty_by_id(self, task_id: int) -> bool:
+        """按任务 ID 完成悬赏。"""
+        await self.conn.execute("UPDATE bounty_tasks SET status = 2 WHERE id = ?", (task_id,))
+        await self.conn.commit()
+        return True
+
+    async def cancel_bounty_by_id(self, task_id: int):
+        """按任务 ID 放弃悬赏。"""
+        await self.conn.execute("UPDATE bounty_tasks SET status = 0 WHERE id = ?", (task_id,))
+        await self.conn.commit()
+
+    async def expire_bounty_by_id(self, task_id: int):
+        """按任务 ID 标记悬赏过期。"""
+        await self.conn.execute("UPDATE bounty_tasks SET status = 3 WHERE id = ?", (task_id,))
+        await self.conn.commit()
+
     async def ensure_system_config_table(self):
         """确保 system_config 表存在。"""
         await self.conn.execute(

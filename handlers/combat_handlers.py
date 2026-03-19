@@ -1,3 +1,4 @@
+import json
 import re
 import time
 
@@ -15,6 +16,8 @@ from ..models_extended import UserStatus
 DUEL_COOLDOWN = 300
 DUEL_LOSER_COOLDOWN = 1800
 DUEL_LOSER_COOLDOWN_KEY = "duel_loser_cd_until"
+DUEL_REQUEST_TIMEOUT = 60
+DUEL_REQUEST_RETRY_COOLDOWN = 60
 SPAR_COOLDOWN = 60
 
 
@@ -116,6 +119,64 @@ class CombatHandlers:
             return match.group(1)
         return None
 
+    def _duel_request_key(self, target_id: str) -> str:
+        return f"duel_request_{target_id}"
+
+    def _duel_request_retry_key(self, challenger_id: str) -> str:
+        return f"duel_request_retry_{challenger_id}"
+
+    async def _get_duel_request_retry_remaining(self, challenger_id: str) -> int:
+        value = await self.db.ext.get_system_config(self._duel_request_retry_key(challenger_id))
+        if not value:
+            return 0
+        retry_until = int(value or 0)
+        remaining = retry_until - int(time.time())
+        if remaining <= 0:
+            await self.db.ext.set_system_config(self._duel_request_retry_key(challenger_id), "0")
+            return 0
+        return remaining
+
+    async def _set_duel_request_retry(self, challenger_id: str, seconds: int = DUEL_REQUEST_RETRY_COOLDOWN):
+        retry_until = int(time.time()) + seconds
+        await self.db.ext.set_system_config(self._duel_request_retry_key(challenger_id), str(retry_until))
+
+    async def _get_pending_duel_request(self, target_id: str) -> dict | None:
+        raw_value = await self.db.ext.get_system_config(self._duel_request_key(target_id))
+        if not raw_value or raw_value == "0":
+            return None
+
+        try:
+            payload = json.loads(raw_value)
+        except Exception:
+            await self.db.ext.set_system_config(self._duel_request_key(target_id), "0")
+            return None
+
+        expire_at = int(payload.get("expire_at", 0) or 0)
+        if expire_at <= int(time.time()):
+            await self.db.ext.set_system_config(self._duel_request_key(target_id), "0")
+            challenger_id = str(payload.get("challenger_id", "") or "")
+            if challenger_id:
+                await self._set_duel_request_retry(challenger_id)
+            return None
+
+        return payload
+
+    async def _set_pending_duel_request(self, challenger_id: str, challenger_name: str, target_id: str):
+        payload = {
+            "challenger_id": challenger_id,
+            "challenger_name": challenger_name,
+            "target_id": target_id,
+            "created_at": int(time.time()),
+            "expire_at": int(time.time()) + DUEL_REQUEST_TIMEOUT,
+        }
+        await self.db.ext.set_system_config(
+            self._duel_request_key(target_id),
+            json.dumps(payload, ensure_ascii=False),
+        )
+
+    async def _clear_pending_duel_request(self, target_id: str):
+        await self.db.ext.set_system_config(self._duel_request_key(target_id), "0")
+
     async def _prepare_combat_stats(self, user_id: str):
         stats, user_cd, _player = await self.battle_hp_service.prepare_combat_stats(
             user_id,
@@ -214,8 +275,96 @@ class CombatHandlers:
     async def handle_duel(self, event: AstrMessageEvent, target: str):
         user_id = event.get_sender_id()
         target_id = await self._get_target_id(event, target)
-        _success, msg, _result = await self.execute_duel(user_id, target_id)
+        if not target_id:
+            yield event.plain_result("请指定决斗目标。")
+            return
+
+        if user_id == target_id:
+            yield event.plain_result("不能和自己决斗。")
+            return
+
+        retry_remaining = await self._get_duel_request_retry_remaining(user_id)
+        if retry_remaining > 0:
+            yield event.plain_result(f"决斗请求冷却中，还需 {retry_remaining} 秒后才能再次发起。")
+            return
+
+        user_cd = await self.db.ext.get_user_cd(user_id)
+        if user_cd and user_cd.type != UserStatus.IDLE:
+            current_status = UserStatus.get_name(user_cd.type)
+            yield event.plain_result(f"你当前正在{current_status}，无法发起决斗请求。")
+            return
+
+        target_cd = await self.db.ext.get_user_cd(target_id)
+        if target_cd and target_cd.type != UserStatus.IDLE:
+            target_status = UserStatus.get_name(target_cd.type)
+            yield event.plain_result(f"对方当前正在{target_status}，暂时无法处理决斗请求。")
+            return
+
+        loser_cd_remaining = await self._get_duel_loser_cooldown_remaining(user_id)
+        if loser_cd_remaining > 0:
+            yield event.plain_result(
+                f"你处于决斗失败冷却中，还需 {loser_cd_remaining // 60} 分 {loser_cd_remaining % 60} 秒。"
+            )
+            return
+
+        cooldown = await self._get_combat_cooldown(user_id)
+        now = int(time.time())
+        last_duel = cooldown.get("last_duel_time", 0)
+        if last_duel and (now - last_duel) < DUEL_COOLDOWN:
+            remaining = DUEL_COOLDOWN - (now - last_duel)
+            yield event.plain_result(f"决斗冷却中，还需 {remaining // 60} 分 {remaining % 60} 秒。")
+            return
+
+        pending_request = await self._get_pending_duel_request(target_id)
+        if pending_request:
+            yield event.plain_result("对方当前已有待处理的决斗请求，请稍后再试。")
+            return
+
+        challenger = await self.db.get_player_by_id(user_id)
+        if not challenger:
+            yield event.plain_result("你还未踏入修仙之路。")
+            return
+
+        await self._set_pending_duel_request(user_id, challenger.name, target_id)
+        yield event.plain_result(
+            f"你向【{target_id}】发起了决斗请求。\n"
+            f"对方可在 {DUEL_REQUEST_TIMEOUT} 秒内输入 /接受决斗 或 /拒绝决斗。"
+        )
+
+    async def handle_accept_duel(self, event: AstrMessageEvent):
+        target_id = event.get_sender_id()
+        request = await self._get_pending_duel_request(target_id)
+        if not request:
+            yield event.plain_result("当前没有待处理的决斗请求。")
+            return
+
+        challenger_id = str(request.get("challenger_id", "") or "")
+        if not challenger_id:
+            await self._clear_pending_duel_request(target_id)
+            yield event.plain_result("这条决斗请求已失效。")
+            return
+
+        await self._clear_pending_duel_request(target_id)
+        success, msg, _result = await self.execute_duel(challenger_id, target_id)
         yield event.plain_result(msg)
+
+    async def handle_reject_duel(self, event: AstrMessageEvent):
+        target_id = event.get_sender_id()
+        request = await self._get_pending_duel_request(target_id)
+        if not request:
+            yield event.plain_result("当前没有待处理的决斗请求。")
+            return
+
+        challenger_id = str(request.get("challenger_id", "") or "")
+        challenger_name = str(request.get("challenger_name", "对方") or "对方")
+        await self._clear_pending_duel_request(target_id)
+        if challenger_id:
+            await self._set_duel_request_retry(challenger_id)
+
+        yield event.plain_result(
+            f"你拒绝了【{challenger_name}】的决斗请求。\n"
+            f"对方需等待 {DUEL_REQUEST_RETRY_COOLDOWN} 秒后才能再次发起。"
+        )
 
     async def handle_spar(self, event: AstrMessageEvent, target: str):
         user_id = event.get_sender_id()

@@ -12,7 +12,7 @@ class BossChallengeService:
 
     BOSS_DAILY_CHALLENGE_COUNT_KEY = "boss_daily_challenge_count"
     BOSS_DAILY_CHALLENGE_DATE_KEY = "boss_daily_challenge_date"
-    BOSS_DAILY_CHALLENGE_LIMIT = 3
+    BOSS_DAILY_CHALLENGE_LIMIT = 4
 
     def __init__(self, db: DataBase):
         self.db = db

@@ -30,7 +30,7 @@ class BossManager:
 
     BOSS_DAILY_CHALLENGE_COUNT_KEY = "boss_daily_challenge_count"
     BOSS_DAILY_CHALLENGE_DATE_KEY = "boss_daily_challenge_date"
-    BOSS_DAILY_CHALLENGE_LIMIT = 3
+    BOSS_DAILY_CHALLENGE_LIMIT = 4
 
     BOSS_LEVELS = [
         {"name": "炼气", "level_index": 0, "hp_mult": 1.0, "atk_mult": 1.0, "reward_mult": 1.0},

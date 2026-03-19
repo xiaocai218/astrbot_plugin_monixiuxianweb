@@ -20,7 +20,7 @@ class CombatResourceService:
     """统一计算和扣除战斗入口资源。"""
 
     COST_CONFIG: Dict[str, CombatResourceCost] = {
-        "spar": CombatResourceCost(mode="spar", ratio=0.03, minimum=30),
+        "spar": CombatResourceCost(mode="spar", ratio=0.0, minimum=0),
         "duel": CombatResourceCost(mode="duel", ratio=0.05, minimum=50),
         "boss": CombatResourceCost(mode="boss", ratio=0.08, minimum=80),
         "impart": CombatResourceCost(mode="impart", ratio=0.10, minimum=100),
@@ -46,6 +46,7 @@ class CombatResourceService:
         else:
             current = int(player.spiritual_qi or 0)
             maximum = int(player.max_spiritual_qi or 0)
+
         maximum = max(maximum, current, 1)
         current = max(0, current)
         return current, maximum
@@ -59,6 +60,7 @@ class CombatResourceService:
         current, maximum = self.get_resource_values(player)
         cost = self.get_entry_cost(player, mode)
         resource_name = self.get_resource_name(player)
+
         if current < cost:
             mode_label = self.MODE_LABELS.get(mode, "战斗")
             return (
@@ -70,6 +72,7 @@ class CombatResourceService:
                 ),
                 cost,
             )
+
         return True, "", cost
 
     async def consume_entry_cost(self, player: Player, mode: str) -> Tuple[bool, str, int]:
@@ -77,17 +80,16 @@ class CombatResourceService:
         if not ok:
             return False, msg, cost
 
+        if cost <= 0:
+            return True, "", 0
+
         if player.cultivation_type == "体修":
-            player.blood_qi = max(0, player.blood_qi - cost)
+            player.blood_qi = max(0, int(player.blood_qi or 0) - cost)
         else:
-            player.spiritual_qi = max(0, player.spiritual_qi - cost)
+            player.spiritual_qi = max(0, int(player.spiritual_qi or 0) - cost)
         await self.db.update_player(player)
 
         resource_name = self.get_resource_name(player)
         mode_label = self.MODE_LABELS.get(mode, "战斗")
         current, maximum = self.get_resource_values(player)
-        return (
-            True,
-            f"{mode_label}消耗{resource_name}：{cost}（当前{resource_name}：{current}/{maximum}）",
-            cost,
-        )
+        return True, f"{mode_label}消耗{resource_name}：{cost}（当前{resource_name}：{current}/{maximum}）", cost

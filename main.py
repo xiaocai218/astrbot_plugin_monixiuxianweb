@@ -132,6 +132,8 @@ CMD_RANK_CONTRIBUTION = "贡献排行"
 
 # ===== 战斗指令 =====
 CMD_DUEL = "决斗"
+CMD_ACCEPT_DUEL = "接受决斗"
+CMD_REJECT_DUEL = "拒绝决斗"
 CMD_SPAR = "切磋"
 
 # ===== 秘境指令 =====
@@ -1013,13 +1015,25 @@ class XiuXianPlugin(Star):
 
     # ===== 战斗指令 =====
 
-    @filter.command(CMD_DUEL, "与其他玩家决斗(消耗气血)")
+    @filter.command(CMD_DUEL, "向其他玩家发起决斗请求")
     @require_whitelist
     async def handle_duel(self, event: AstrMessageEvent, target: str = ""):
         async for r in self.combat_handlers.handle_duel(event, target):
             yield r
-            
-    @filter.command(CMD_SPAR, "与其他玩家切磋(无消耗)")
+
+    @filter.command(CMD_ACCEPT_DUEL, "接受其他玩家发起的决斗")
+    @require_whitelist
+    async def handle_accept_duel(self, event: AstrMessageEvent):
+        async for r in self.combat_handlers.handle_accept_duel(event):
+            yield r
+
+    @filter.command(CMD_REJECT_DUEL, "拒绝其他玩家发起的决斗")
+    @require_whitelist
+    async def handle_reject_duel(self, event: AstrMessageEvent):
+        async for r in self.combat_handlers.handle_reject_duel(event):
+            yield r
+              
+    @filter.command(CMD_SPAR, "与其他玩家切磋(即时开始，无消耗)")
     @require_whitelist
     async def handle_spar(self, event: AstrMessageEvent, target: str = ""):
         async for r in self.combat_handlers.handle_spar(event, target):
