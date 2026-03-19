@@ -1,4 +1,4 @@
-"""AstrBot ??????????"""
+"""AstrBot 模拟修仙插件主入口。"""
 
 import asyncio
 from functools import wraps
@@ -60,7 +60,7 @@ from .managers import (
 
 
 def require_whitelist(func):
-    """??????????????"""
+    """限制指令只能在白名单范围内使用。"""
 
     @wraps(func)
     async def wrapper(self, event: AstrMessageEvent, *args, **kwargs):
@@ -256,7 +256,7 @@ class XiuXianPlugin(Star):
         self.impart_handlers = ImpartHandlers(self.db, self.impart_mgr)
         self.nickname_handler = NicknameHandler(self.db)  # Phase 1
         
-        # Phase 2: 灵石银行和悬赏令
+        # Phase 2: 灵石银行和悬赏任务
         self.bank_mgr = BankManager(self.db, self.config, self.config_manager)
         self.bounty_mgr = BountyManager(self.db, self.storage_ring_mgr)
         self.bank_handlers = BankHandlers(self.db, self.bank_mgr)
@@ -1156,7 +1156,7 @@ class XiuXianPlugin(Star):
         async for r in self.bank_handlers.handle_breakthrough_loan(event, amount):
             yield r
 
-    # ===== Phase 2: 悬赏令 =====
+    # ===== Phase 2: 悬赏任务 =====
     @filter.command(CMD_BOUNTY_LIST, "查看悬赏任务")
     @require_whitelist
     async def handle_bounty_list(self, event: AstrMessageEvent):
