@@ -1,167 +1,285 @@
+"""修仙个人信息图片卡片生成器。"""
+
 import asyncio
-from io import BytesIO
+import logging
+import random
+import tempfile
+from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict, Iterable, Optional
 
 try:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageColor, ImageDraw, ImageFilter, ImageFont
+
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
 
-from astrbot.api import logger
-from astrbot.core.utils.astrbot_path import get_astrbot_data_path
+try:
+    from astrbot.api import logger
+except ImportError:
+    logger = logging.getLogger(__name__)
 
-# 资源路径配置
-# 默认寻找 data/xiuxian 目录 (AstrBot数据目录下的xiuxian文件夹)
-ASSETS_PATH = Path(get_astrbot_data_path()) / "xiuxian"
-FONT_PATH = ASSETS_PATH / "font" / "font.ttf"
-IMG_PATH = ASSETS_PATH / "info_img"
+__all__ = ["ImageGenerator"]
+
 
 class ImageGenerator:
-    """图片生成器"""
-    
+    """生成更适合聊天场景阅读的个人信息卡片。"""
+
+    CARD_SIZE = (1440, 1880)
+    PAGE_PADDING = 64
+    BACKGROUND_COLOR = (9, 15, 28)
+    OVERLAY_COLOR = (4, 10, 18, 118)
+    PANEL_COLOR = (15, 22, 38, 230)
+    PANEL_BORDER_COLOR = (206, 176, 92, 215)
+    TITLE_COLOR = "#F5D08A"
+    LABEL_COLOR = "#D7E1F7"
+    VALUE_COLOR = "#F7FAFF"
+    SUBTITLE_COLOR = "#A9B6D4"
+    SHADOW_COLOR = (0, 0, 0, 148)
+
     def __init__(self):
         self.has_pil = HAS_PIL
-        if not self.has_pil:
-            logger.warning("【修仙插件】未检测到 Pillow 库，将无法生成图片卡片。请安装 pip install Pillow")
-            
-    def _get_font(self, size: int):
-        if not FONT_PATH.exists():
-            # 尝试使用系统字体或默认
-            return ImageFont.load_default()
-        return ImageFont.truetype(str(FONT_PATH), size)
+        self.assets_dir = Path(__file__).resolve().parent.parent / "resources" / "profile_card"
+        self.output_dir = Path(tempfile.gettempdir()) / "astrbot_monixiuxian2_cards"
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    async def generate_user_info_card(self, user_id: str, detail_map: Dict) -> Optional[BytesIO]:
-        """
-        生成用户信息卡片
-        
-        Args:
-            user_id: 用户ID
-            detail_map: 属性字典 (参考 NoneBot 插件格式)
-            
-        Returns:
-            BytesIO: 图片数据，如果生成失败返回None
-        """
         if not self.has_pil:
-            return None
-            
-        if not IMG_PATH.exists():
-            logger.warning(f"【修仙插件】资源目录 {IMG_PATH} 不存在，无法生成卡片。")
+            logger.warning("【模拟修仙】未检测到 Pillow，个人信息图片卡片不可用。")
+
+    async def generate_user_info_card(self, user_id: str, detail_map: Dict) -> Optional[str]:
+        """生成个人信息图片并返回本地路径。"""
+        if not self.has_pil:
             return None
 
         try:
-            # 跑在线程池中避免阻塞
-            return await asyncio.to_thread(self._draw_info_card_sync, user_id, detail_map)
-        except Exception as e:
-            logger.error(f"生成图片失败: {e}")
+            return await asyncio.to_thread(self._render_card, user_id, detail_map)
+        except Exception as exc:
+            logger.error(f"【模拟修仙】生成个人信息卡片失败：{exc}")
             return None
 
-    def _draw_info_card_sync(self, user_id: str, detail_map: Dict) -> BytesIO:
-        # 画布基础尺寸
-        width = 1100
-        height = 2250
-        
-        # 1. 背景图
-        back_path = IMG_PATH / "back.png"
-        if back_path.exists():
-            img = Image.open(back_path).convert("RGBA").resize((width, height))
-        else:
-            img = Image.new("RGBA", (width, height), (50, 50, 50, 255))
-            
-        # 字体
-        font_36 = self._get_font(36)
-        font_40 = self._get_font(40)
-        color_text = (242, 250, 242)
-        
-        draw = ImageDraw.Draw(img)
-        
-        # 简单绘制逻辑 (复刻原版布局)
-        
-        # 2. 基本信息栏 (头像位置预留)
-        # 绘制 QQ/User ID
-        line3_path = IMG_PATH / "line3.png"
-        if line3_path.exists():
-            line3 = Image.open(line3_path).convert("RGBA").resize((400, 60))
-            # 绘制ID
-            l_draw = ImageDraw.Draw(line3)
-            id_text = f"ID: {user_id}"
-            w = l_draw.textlength(id_text, font=font_36)
-            l_draw.text(((400-w)/2, 10), id_text, fill=color_text, font=font_36)
-            img.paste(line3, (130, 520), line3)
+    def _render_card(self, user_id: str, detail_map: Dict) -> str:
+        width, height = self.CARD_SIZE
+        image = self._build_background(width, height)
+        draw = ImageDraw.Draw(image)
 
-        # 3. 属性列表 (右侧)
-        right_keys = ['道号', '境界', '修为', '灵石', '战力']
-        base_y = 100
-        for i, key in enumerate(right_keys):
-            val = detail_map.get(key, "未知")
-            self._draw_status_line(img, key, str(val), 550, base_y + i * 103, font_36, color_text)
+        title_font = self._get_font(86, bold=True)
+        subtitle_font = self._get_font(28)
+        section_font = self._get_font(42, bold=True)
+        label_font = self._get_font(34, bold=True)
+        value_font = self._get_font(36)
+        tip_font = self._get_font(30)
 
-        # 4. 基本信息 (中间)
-        self._draw_section_header(img, "【基本信息】", 600, font_40, color_text)
-        base_keys = ["灵根", "突破状态", "主修功法", "攻击力", "法器", "防具"]
-        base_list_y = 703
-        for i, key in enumerate(base_keys):
-            val = detail_map.get(key, "无")
-            self._draw_wide_line(img, key, str(val), 100, base_list_y + i * 103, font_36, color_text)
+        current_y = self.PAGE_PADDING
 
-        # 5. 宗门信息
-        sect_y_header = base_list_y + len(base_keys) * 103 + 50 # 动态计算高度? 原版是硬编码
-        sect_y_header = 1442 # 原版硬编码
-        self._draw_section_header(img, "【宗门信息】", sect_y_header, font_40, color_text)
-        
-        sect_keys = ["所在宗门", "宗门职位"]
-        sect_y_list = 1547
-        for i, key in enumerate(sect_keys):
-            val = detail_map.get(key, "无")
-            self._draw_wide_line(img, key, str(val), 100, sect_y_list + i * 103, font_36, color_text)
+        self._draw_glow_title(draw, (self.PAGE_PADDING, current_y), "道友信息", title_font, self.TITLE_COLOR)
+        current_y += 102
 
-        # 6. 转换输出
-        img = img.convert("RGB")
-        output = BytesIO()
-        img.save(output, format="JPEG", quality=90)
-        output.seek(0)
-        return output
+        subtitle = f"ID: {user_id}    生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        draw.text((self.PAGE_PADDING + 4, current_y), subtitle, font=subtitle_font, fill=self.SUBTITLE_COLOR)
+        current_y += 64
 
-    def _draw_status_line(self, img, key, value, x, y, font, color):
-        path = IMG_PATH / "line3.png"
-        text = f"{key}:{value}"
-        if path.exists():
-            line = Image.open(path).convert("RGBA").resize((450, 68))
-            d = ImageDraw.Draw(line)
-            try:
-                # Pillow 9.2+ using textbbox or textlength, older using textsize
-                # simple centered logic
-                d.text((70, 15), text, fill=color, font=font)
-            except:
-                 d.text((70, 15), text, fill=color, font=font)
-            img.paste(line, (x, y), line)
-        else:
-            # fallback
-            d = ImageDraw.Draw(img)
-            d.text((x, y), text, fill=color, font=font)
+        sections = [
+            ("基本信息", detail_map.get("basic_info", [])),
+            ("修炼属性", detail_map.get("cultivation_info", [])),
+            ("装备与灵宠", detail_map.get("equipment_info", [])),
+            ("宗门与其他", detail_map.get("other_info", [])),
+        ]
 
-    def _draw_wide_line(self, img, key, value, x, y, font, color):
-        path = IMG_PATH / "line4.png"
-        text = f"{key}:{value}"
-        if path.exists():
-            line = Image.open(path).convert("RGBA").resize((900, 100))
-            d = ImageDraw.Draw(line)
-            d.text((100, 30), text, fill=color, font=font)
-            img.paste(line, (x, y), line)
-        else:
-            d = ImageDraw.Draw(img)
-            d.text((x, y), text, fill=color, font=font)
+        for title, rows in sections:
+            if not rows:
+                continue
+            panel_height = self._estimate_section_height(rows, value_font)
+            self._draw_section(
+                image=image,
+                title=title,
+                rows=rows,
+                rect=(self.PAGE_PADDING, current_y, width - self.PAGE_PADDING * 2, panel_height),
+                section_font=section_font,
+                label_font=label_font,
+                value_font=value_font,
+            )
+            current_y += panel_height + 30
 
-    def _draw_section_header(self, img, text, y, font, color):
-        path = IMG_PATH / "line2.png"
-        if path.exists():
-            line = Image.open(path).convert("RGBA").resize((900, 100))
-            d = ImageDraw.Draw(line)
-            # Centered text approx
-            w = d.textlength(text, font=font)
-            d.text(((900-w)/2, 30), text, fill=color, font=font)
-            img.paste(line, (100, y), line)
-        else:
-            d = ImageDraw.Draw(img)
-            d.text((100, y), text, fill=color, font=font)
+        tips = [tip for tip in detail_map.get("tips", []) if tip]
+        if tips:
+            tip_rows = [("提示", tip) for tip in tips]
+            tip_height = self._estimate_section_height(tip_rows, tip_font, line_height=50)
+            self._draw_section(
+                image=image,
+                title="状态提示",
+                rows=tip_rows,
+                rect=(self.PAGE_PADDING, current_y, width - self.PAGE_PADDING * 2, tip_height),
+                section_font=section_font,
+                label_font=label_font,
+                value_font=tip_font,
+                line_height=50,
+            )
+
+        output_path = self.output_dir / f"user_info_{self._safe_name(user_id)}.png"
+        image.save(output_path, format="PNG")
+        return str(output_path)
+
+    def _build_background(self, width: int, height: int) -> Image.Image:
+        background = self._load_background_image(width, height)
+        if background is None:
+            background = Image.new("RGB", (width, height), self.BACKGROUND_COLOR)
+            self._paint_fallback_background(background)
+
+        overlay = Image.new("RGBA", (width, height), self.OVERLAY_COLOR)
+        return Image.alpha_composite(background.convert("RGBA"), overlay)
+
+    def _load_background_image(self, width: int, height: int) -> Optional[Image.Image]:
+        candidates = [
+            path
+            for path in sorted(self.assets_dir.rglob("*"))
+            if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
+        ]
+        if not candidates:
+            return None
+
+        selected = random.choice(candidates)
+        logger.info(f"【模拟修仙】使用背景素材：{selected.name}")
+        with Image.open(selected) as source:
+            image = source.convert("RGBA")
+            ratio = max(width / image.width, height / image.height)
+            resized = image.resize((int(image.width * ratio), int(image.height * ratio)))
+            left = max(0, (resized.width - width) // 2)
+            top = max(0, (resized.height - height) // 2)
+            return resized.crop((left, top, left + width, top + height))
+
+    def _paint_fallback_background(self, image: Image.Image):
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((0, 0, image.width, image.height), fill=self.BACKGROUND_COLOR)
+        draw.ellipse((840, -120, 1500, 380), fill=ImageColor.getrgb("#1B3559"))
+        draw.ellipse((-180, 1180, 420, 1900), fill=ImageColor.getrgb("#2B2149"))
+        draw.ellipse((220, 280, 560, 680), fill=ImageColor.getrgb("#17363B"))
+
+    def _draw_section(
+        self,
+        image: Image.Image,
+        title: str,
+        rows: Iterable[tuple[str, str]],
+        rect: tuple[int, int, int, int],
+        section_font,
+        label_font,
+        value_font,
+        line_height: int = 56,
+    ):
+        x, y, width, height = rect
+
+        panel = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        panel_draw = ImageDraw.Draw(panel)
+        panel_draw.rounded_rectangle(
+            (0, 0, width - 1, height - 1),
+            radius=34,
+            fill=self.PANEL_COLOR,
+            outline=self.PANEL_BORDER_COLOR,
+            width=3,
+        )
+
+        shadow = Image.new("RGBA", (width + 44, height + 44), (0, 0, 0, 0))
+        shadow_draw = ImageDraw.Draw(shadow)
+        shadow_draw.rounded_rectangle(
+            (18, 18, width + 18, height + 18),
+            radius=40,
+            fill=self.SHADOW_COLOR,
+        )
+        shadow = shadow.filter(ImageFilter.GaussianBlur(12))
+        image.alpha_composite(shadow, (x - 22, y - 22))
+        image.alpha_composite(panel, (x, y))
+
+        draw = ImageDraw.Draw(image)
+        self._draw_glow_title(draw, (x + 32, y + 24), title, section_font, self.TITLE_COLOR)
+
+        start_y = y + 96
+        label_x = x + 34
+        value_x = x + 290
+        value_width = width - 330
+
+        line_spacing = 40
+        current_y = start_y
+        for label, value in rows:
+            wrapped_lines = self._wrap_text(draw, str(value), value_font, value_width)
+            draw.text((label_x, current_y), str(label), font=label_font, fill=self.LABEL_COLOR)
+            for line_index, line in enumerate(wrapped_lines):
+                draw.text(
+                    (value_x, current_y + line_index * line_spacing),
+                    line,
+                    font=value_font,
+                    fill=self.VALUE_COLOR,
+                )
+            block_height = max(line_height, len(wrapped_lines) * line_spacing)
+            current_y += block_height
+
+    def _estimate_section_height(self, rows: Iterable[tuple[str, str]], value_font, line_height: int = 56) -> int:
+        total_height = 0
+        scratch = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(scratch)
+
+        for _label, value in rows:
+            wrapped = self._wrap_text(draw, str(value), value_font, 1020)
+            block_height = max(line_height, len(wrapped) * 40)
+            total_height += block_height
+
+        return 108 + total_height + 26
+
+    def _wrap_text(self, draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
+        if not text:
+            return [""]
+
+        lines = []
+        current = ""
+        for char in text:
+            candidate = current + char
+            bbox = draw.textbbox((0, 0), candidate, font=font)
+            text_width = bbox[2] - bbox[0]
+            if current and text_width > max_width:
+                lines.append(current)
+                current = char
+            else:
+                current = candidate
+
+        if current:
+            lines.append(current)
+
+        return lines[:3]
+
+    def _draw_glow_title(self, draw: ImageDraw.ImageDraw, position: tuple[int, int], text: str, font, fill: str):
+        x, y = position
+        glow_color = ImageColor.getrgb("#76561B")
+        for dx, dy in [(-3, 0), (3, 0), (0, -3), (0, 3)]:
+            draw.text((x + dx, y + dy), text, font=font, fill=glow_color)
+        draw.text((x, y), text, font=font, fill=fill)
+
+    def _get_font(self, size: int, bold: bool = False):
+        for path in self._candidate_fonts(bold):
+            if path.exists():
+                try:
+                    return ImageFont.truetype(str(path), size=size)
+                except OSError:
+                    continue
+        return ImageFont.load_default()
+
+    def _candidate_fonts(self, bold: bool) -> Iterable[Path]:
+        local_fonts = [
+            self.assets_dir / "fonts" / "font.ttf",
+            self.assets_dir / "fonts" / "font.ttc",
+            self.assets_dir / "font.ttf",
+            self.assets_dir / "font.ttc",
+        ]
+        for path in local_fonts:
+            yield path
+
+        windows_dir = Path("C:/Windows/Fonts")
+        font_names = [
+            "msyhbd.ttc" if bold else "msyh.ttc",
+            "simhei.ttf" if bold else "simsun.ttc",
+            "SourceHanSansSC-Bold.otf" if bold else "SourceHanSansSC-Regular.otf",
+            "arialbd.ttf" if bold else "arial.ttf",
+        ]
+        for name in font_names:
+            yield windows_dir / name
+
+    def _safe_name(self, value: str) -> str:
+        return "".join(char if char.isalnum() or char in {"_", "-"} else "_" for char in value)

@@ -60,6 +60,111 @@ class MigrationManager:
         else:
             logger.info("数据库已是最新版本，无需升级。")
 
+        # 兼容性兜底：有些环境可能 db_info 版本已更新，但实际表结构未补齐（如手工迁移/拷贝旧库）。
+        # 这里做一次结构自检与补全，确保关键列存在，避免运行期因缺列报错。
+        await _ensure_schema_compatibility(self.conn)
+
+
+async def _ensure_column(
+    conn: aiosqlite.Connection,
+    table_name: str,
+    column_name: str,
+    column_ddl: str,
+) -> bool:
+    """确保某张表存在指定列；若缺失则自动补齐。
+
+    Returns:
+        bool: 是否发生了结构变更（新增列）。
+    """
+    async with conn.execute(f"PRAGMA table_info({table_name})") as cursor:
+        cols = await cursor.fetchall()
+    if not cols:
+        return False
+    existing = {row[1] for row in cols}  # row[1] == name
+    if column_name in existing:
+        return False
+
+    await conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_ddl}")
+    return True
+
+
+async def _table_exists(conn: aiosqlite.Connection, table_name: str) -> bool:
+    async with conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    ) as cursor:
+        return await cursor.fetchone() is not None
+
+
+async def _ensure_schema_compatibility(conn: aiosqlite.Connection) -> None:
+    """对关键表做一次 schema 自检，修复“版本号已更新但列缺失”的历史遗留问题。"""
+    changed = False
+    try:
+        changed |= await _ensure_column(
+            conn,
+            table_name="user_cd",
+            column_name="extra_data",
+            column_ddl="extra_data TEXT NOT NULL DEFAULT '{}'",
+        )
+    except Exception as e:
+        # 若表不存在或被锁等情况，不阻塞启动；后续正常迁移/重建可修复
+        logger.warning(f"兼容性修复 user_cd.extra_data 失败: {e}")
+
+    try:
+        if not await _table_exists(conn, "spirit_eyes"):
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS spirit_eyes (
+                    eye_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    eye_type INTEGER NOT NULL DEFAULT 1,
+                    eye_name TEXT NOT NULL DEFAULT '下品灵眼',
+                    exp_per_hour INTEGER NOT NULL DEFAULT 0,
+                    spawn_time INTEGER NOT NULL DEFAULT 0,
+                    owner_id TEXT,
+                    owner_name TEXT,
+                    claim_time INTEGER,
+                    last_collect_time INTEGER NOT NULL DEFAULT 0
+                )
+                """,
+            )
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_spirit_eyes_owner ON spirit_eyes(owner_id)")
+            changed = True
+
+            # 初始化最小数量的灵眼，避免定时任务/查询链路在“空表”时异常
+            async with conn.execute("SELECT COUNT(*) FROM spirit_eyes") as cursor:
+                row = await cursor.fetchone()
+                total = int(row[0] or 0) if row else 0
+            if total == 0:
+                import time as _time
+
+                now = int(_time.time())
+                for _ in range(6):
+                    await conn.execute(
+                        "INSERT INTO spirit_eyes (eye_type, eye_name, exp_per_hour, spawn_time) VALUES (?, ?, ?, ?)",
+                        (1, "下品灵眼", 500, now),
+                    )
+                changed = True
+        else:
+            # 旧库可能存在 spirit_eyes 但缺关键列
+            changed |= await _ensure_column(
+                conn,
+                table_name="spirit_eyes",
+                column_name="exp_per_hour",
+                column_ddl="exp_per_hour INTEGER NOT NULL DEFAULT 0",
+            )
+            changed |= await _ensure_column(
+                conn,
+                table_name="spirit_eyes",
+                column_name="last_collect_time",
+                column_ddl="last_collect_time INTEGER NOT NULL DEFAULT 0",
+            )
+    except Exception as e:
+        logger.warning(f"兼容性修复 spirit_eyes 表失败: {e}")
+
+    if changed:
+        await conn.commit()
+        logger.info("已完成数据库兼容性修复：补齐缺失字段。")
+
 async def _create_all_tables_v1(conn: aiosqlite.Connection):
     """创建所有表 - v1，只保留玩家基础信息"""
 

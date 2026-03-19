@@ -16,6 +16,7 @@ from ..managers.combat_manager import CombatManager
 from ..managers.pet_manager import PetManager
 from ..models import Player
 from ..models_extended import UserStatus
+from ..utils.image_generator import ImageGenerator
 from .utils import player_required
 
 CMD_START_XIUXIAN = "我要修仙"
@@ -41,10 +42,11 @@ class PlayerHandler:
         self.battle_hp_service = BattleHpService(self.db, CombatManager(), config_manager)
         self.boss_challenge_service = BossChallengeService(self.db)
         self.pet_manager = PetManager(self.db)
+        self.image_generator = ImageGenerator()
         self.enlightenment_manager = None
 
     async def _resolve_display_battle_hp(self, player: Player):
-        """统一结算展示用战斗 HP。"""
+        """统一结算展示用战斗HP。"""
         return await self.battle_hp_service.resolve_player_battle_status(player)
 
     async def _resolve_display_status(self, player: Player) -> str:
@@ -53,6 +55,25 @@ class PlayerHandler:
         if user_cd and user_cd.type != UserStatus.IDLE:
             return UserStatus.get_name(user_cd.type)
         return player.state or "空闲"
+
+    async def _get_pet_display_name(self, user_id: str) -> str:
+        equipped_pet = await self.pet_manager.get_equipped_pet(user_id)
+        if not equipped_pet or equipped_pet.get("state") != "active":
+            return "未携带"
+
+        pet_rank = self.pet_manager.RANK_LABELS.get(
+            equipped_pet.get("rank", ""),
+            equipped_pet.get("rank", "未知"),
+        )
+        pet_skill_1 = self.pet_manager.SKILL_LABELS.get(
+            equipped_pet.get("skill_1", ""),
+            equipped_pet.get("skill_1", ""),
+        )
+        pet_skill_2 = self.pet_manager.SKILL_LABELS.get(
+            equipped_pet.get("skill_2", ""),
+            equipped_pet.get("skill_2", ""),
+        )
+        return f"{equipped_pet['name']}（{pet_rank}，{pet_skill_1}/{pet_skill_2}）"
 
     async def handle_start_xiuxian(self, event: AstrMessageEvent, cultivation_type: str = ""):
         """创建角色。"""
@@ -106,7 +127,7 @@ class PlayerHandler:
 
     @player_required
     async def handle_player_info(self, player: Player, event: AstrMessageEvent):
-        """查看玩家信息。"""
+        """查看玩家信息，优先输出图片卡片。"""
         display_name = event.get_sender_name()
         required_exp = player.get_required_exp(self.config_manager)
 
@@ -157,72 +178,15 @@ class PlayerHandler:
         technique_name = player.main_technique if player.main_technique else "无"
         breakthrough_rate = f"+{player.level_up_rate}%" if player.level_up_rate > 0 else "0%"
         dao_hao = player.user_name if player.user_name else display_name
-        equipped_pet = await self.pet_manager.get_equipped_pet(player.user_id)
-        if equipped_pet and equipped_pet.get("state") == "active":
-            pet_rank = self.pet_manager.RANK_LABELS.get(equipped_pet.get("rank", ""), equipped_pet.get("rank", "未知"))
-            pet_skill_1 = self.pet_manager.SKILL_LABELS.get(equipped_pet.get("skill_1", ""), equipped_pet.get("skill_1", ""))
-            pet_skill_2 = self.pet_manager.SKILL_LABELS.get(equipped_pet.get("skill_2", ""), equipped_pet.get("skill_2", ""))
-            pet_name = f"{equipped_pet['name']}（{pet_rank}，{pet_skill_1}/{pet_skill_2}）"
-        else:
-            pet_name = "未携带"
+        pet_name = await self._get_pet_display_name(player.user_id)
 
-        reply_msg = (
-            f"📋 道友 {dao_hao} 的信息\n"
-            "━━━━━━━━━━━━━━\n"
-            "【基本信息】\n"
-            f"  道号：{dao_hao}\n"
-            f"  境界：{player.get_level(self.config_manager)}\n"
-            f"  修为：{int(player.experience):,}/{int(required_exp):,}\n"
-            f"  灵石：{player.gold:,}\n"
-            f"  战力：{combat_power:,}\n"
-            f"  灵根：{player.spiritual_root}\n"
-            f"  突破加成：{breakthrough_rate}\n"
-            "\n"
-            "【修炼属性】\n"
-            f"  修炼方式：{player.cultivation_type}\n"
-            f"  状态：{display_status}\n"
-            f"  寿命：{player.lifespan}\n"
-            f"  精神力：{total_attrs['mental_power']}\n"
-            f"  战斗HP：{battle_hp}/{battle_hp_max}\n"
-            f"  Boss次数：今日剩余 {boss_remaining_count}/{BossChallengeService.BOSS_DAILY_CHALLENGE_LIMIT}\n"
-        )
-
+        tips = []
         if hp_recovering:
             if boss_cooldown_remaining > 0:
                 minutes = boss_cooldown_remaining // 60
                 seconds = boss_cooldown_remaining % 60
-                reply_msg += f"  Boss冷却：{minutes}分{seconds}秒\n"
-            reply_msg += "  战斗HP恢复：每分钟恢复10%，约10分钟恢复满血\n"
-
-        if player.cultivation_type == "体修":
-            reply_msg += (
-                f"  气血：{player.blood_qi}/{total_attrs.get('max_blood_qi', 0)}\n"
-                f"  物伤：{total_attrs['physical_damage']}\n"
-                f"  法伤：{total_attrs['magic_damage']}\n"
-                f"  物防：{total_attrs['physical_defense']}\n"
-                f"  法防：{total_attrs['magic_defense']}\n"
-            )
-        else:
-            reply_msg += (
-                f"  灵气：{player.spiritual_qi}/{total_attrs.get('max_spiritual_qi', 0)}\n"
-                f"  法伤：{total_attrs['magic_damage']}\n"
-                f"  物伤：{total_attrs['physical_damage']}\n"
-                f"  法防：{total_attrs['magic_defense']}\n"
-                f"  物防：{total_attrs['physical_defense']}\n"
-            )
-
-        reply_msg += (
-            "\n"
-            "【装备信息】\n"
-            f"  主修功法：{technique_name}\n"
-            f"  法器：{weapon_name}\n"
-            f"  防具：{armor_name}\n"
-            f"  灵宠：{pet_name}\n"
-            "\n"
-            "【宗门信息】\n"
-            f"  所在宗门：{sect_name}\n"
-            f"  宗门职位：{position_name}\n"
-        )
+                tips.append(f"Boss冷却：{minutes}分{seconds}秒")
+            tips.append("战斗HP恢复中：每分钟恢复10%，约10分钟恢复满血")
 
         loan = await self.db.ext.get_active_loan(player.user_id)
         if loan:
@@ -244,17 +208,110 @@ class PlayerHandler:
             else:
                 time_str = f"{remaining_days}天"
 
-            reply_msg += (
-                "\n"
-                "【贷款信息】\n"
-                f"  类型：{loan_type_name}\n"
-                f"  应还：{total_due:,} 灵石\n"
-                f"  剩余：{time_str}\n"
-                "  逾期将被追杀致死\n"
-            )
+            tips.append(f"贷款：{loan_type_name}，应还 {total_due:,} 灵石，剩余 {time_str}")
 
-        reply_msg += "━━━━━━━━━━━━━━"
-        yield event.plain_result(reply_msg)
+        if player.cultivation_type == "体修":
+            resource_name = "气血"
+            resource_value = f"{player.blood_qi}/{total_attrs.get('max_blood_qi', 0)}"
+            primary_damage = total_attrs["physical_damage"]
+            secondary_damage = total_attrs["magic_damage"]
+            primary_defense = total_attrs["physical_defense"]
+            secondary_defense = total_attrs["magic_defense"]
+        else:
+            resource_name = "灵气"
+            resource_value = f"{player.spiritual_qi}/{total_attrs.get('max_spiritual_qi', 0)}"
+            primary_damage = total_attrs["magic_damage"]
+            secondary_damage = total_attrs["physical_damage"]
+            primary_defense = total_attrs["magic_defense"]
+            secondary_defense = total_attrs["physical_defense"]
+
+        detail_map = {
+            "basic_info": [
+                ("道号", dao_hao),
+                ("境界", player.get_level(self.config_manager)),
+                ("修为", f"{int(player.experience):,}/{int(required_exp):,}"),
+                ("灵石", f"{player.gold:,}"),
+                ("战力", f"{combat_power:,}"),
+                ("灵根", player.spiritual_root),
+                ("突破加成", breakthrough_rate),
+            ],
+            "cultivation_info": [
+                ("修炼方式", player.cultivation_type),
+                ("状态", display_status),
+                ("寿命", str(player.lifespan)),
+                ("精神力", str(total_attrs["mental_power"])),
+                ("战斗HP", f"{battle_hp}/{battle_hp_max}"),
+                ("Boss次数", f"今日剩余 {boss_remaining_count}/{BossChallengeService.BOSS_DAILY_CHALLENGE_LIMIT}"),
+                (resource_name, resource_value),
+                ("主伤害", str(primary_damage)),
+                ("副伤害", str(secondary_damage)),
+                ("主防御", str(primary_defense)),
+                ("副防御", str(secondary_defense)),
+            ],
+            "equipment_info": [
+                ("主修功法", technique_name),
+                ("法器", weapon_name),
+                ("防具", armor_name),
+                ("灵宠", pet_name),
+            ],
+            "other_info": [
+                ("宗门", sect_name),
+                ("职位", position_name),
+            ],
+            "tips": tips,
+        }
+
+        image_path = await self.image_generator.generate_user_info_card(player.user_id, detail_map)
+        if image_path:
+            yield event.image_result(image_path)
+            return
+
+        reply_lines = [
+            f"📋 道友 {dao_hao} 的信息",
+            "━━━━━━━━━━━━━━━",
+            "【基本信息】",
+            f"  道号：{dao_hao}",
+            f"  境界：{player.get_level(self.config_manager)}",
+            f"  修为：{int(player.experience):,}/{int(required_exp):,}",
+            f"  灵石：{player.gold:,}",
+            f"  战力：{combat_power:,}",
+            f"  灵根：{player.spiritual_root}",
+            f"  突破加成：{breakthrough_rate}",
+            "",
+            "【修炼属性】",
+            f"  修炼方式：{player.cultivation_type}",
+            f"  状态：{display_status}",
+            f"  寿命：{player.lifespan}",
+            f"  精神力：{total_attrs['mental_power']}",
+            f"  战斗HP：{battle_hp}/{battle_hp_max}",
+            f"  Boss次数：今日剩余 {boss_remaining_count}/{BossChallengeService.BOSS_DAILY_CHALLENGE_LIMIT}",
+            f"  {resource_name}：{resource_value}",
+            f"  主伤害：{primary_damage}",
+            f"  副伤害：{secondary_damage}",
+            f"  主防御：{primary_defense}",
+            f"  副防御：{secondary_defense}",
+        ]
+
+        if tips:
+            reply_lines.extend(["", "【状态提示】"])
+            reply_lines.extend([f"  {tip}" for tip in tips])
+
+        reply_lines.extend(
+            [
+                "",
+                "【装备信息】",
+                f"  主修功法：{technique_name}",
+                f"  法器：{weapon_name}",
+                f"  防具：{armor_name}",
+                f"  灵宠：{pet_name}",
+                "",
+                "【宗门信息】",
+                f"  所在宗门：{sect_name}",
+                f"  宗门职位：{position_name}",
+                "━━━━━━━━━━━━━━━",
+            ]
+        )
+        yield event.plain_result("\n".join(reply_lines))
 
     @player_required
     async def handle_start_cultivation(self, player: Player, event: AstrMessageEvent):
@@ -275,7 +332,7 @@ class PlayerHandler:
         await self.db.ext.set_user_busy(player.user_id, UserStatus.CULTIVATING, 0)
 
         yield event.plain_result(
-            "🝝 道友已进入闭关状态\n"
+            "🧘 道友已进入闭关状态\n"
             "━━━━━━━━━━━━━━\n"
             "闭关期间，你将潜心修炼。\n"
             f"发送“{CMD_END_CULTIVATION}”结束闭关。"
@@ -355,10 +412,10 @@ class PlayerHandler:
         exceed_msg = ""
         if exceeded_time:
             effective_hours = max_cultivation_minutes // 60
-            exceed_msg = f"\n⚠ 闭关超过{effective_hours}小时，仅计算前{effective_hours}小时修为"
+            exceed_msg = f"\n⚠️ 闭关超过{effective_hours}小时，仅计算前{effective_hours}小时修为"
 
         reply_msg = (
-            "🟲 道友出关成功\n"
+            "🎵 道友出关成功\n"
             "━━━━━━━━━━━━━━\n"
             f"闭关时长：{time_str}\n"
             f"获得修为：{gained_exp:,}{exceed_msg}\n"
@@ -374,7 +431,7 @@ class PlayerHandler:
         """每日签到。"""
         today = datetime.now().strftime("%Y-%m-%d")
         if player.last_check_in_date == today:
-            yield event.plain_result("📦 道友今日已经签到过了，请明日再来。")
+            yield event.plain_result("📝 道友今日已经签到过了，请明日再来。")
             return
 
         values_config = self.config.get("VALUES", {}) if hasattr(self.config, "get") else {}
@@ -389,7 +446,7 @@ class PlayerHandler:
         await self.db.update_player(player)
 
         reply_msg = (
-            "✓ 签到成功\n"
+            "✅ 签到成功\n"
             "━━━━━━━━━━━━━━\n"
             f"获得灵石：{check_in_gold}\n"
             f"当前灵石：{player.gold}\n"
@@ -427,7 +484,7 @@ class PlayerHandler:
                 hours = (remaining % 86400) // 3600
                 minutes = (remaining % 3600) // 60
                 yield event.plain_result(
-                    "🔀 弃道重修冷却中\n"
+                    "🚢 弃道重修冷却中\n"
                     "━━━━━━━━━━━━━━\n"
                     f"距离下次重修还需：{days}天{hours}小时{minutes}分钟"
                 )
@@ -435,7 +492,7 @@ class PlayerHandler:
 
         if confirm_text.strip() != "确认":
             yield event.plain_result(
-                "⚠ 弃道重修将删除当前角色的所有数据，且无法撤回。\n"
+                "⚠️ 弃道重修将删除当前角色的所有数据，且无法撤回。\n"
                 "限制：每7天只能重修一次，且必须处于空闲状态、无贷款时使用。\n"
                 "━━━━━━━━━━━━━━\n"
                 "若你已做好准备，请发送：\n"
@@ -447,7 +504,7 @@ class PlayerHandler:
         await self.db.ext.set_system_config(key, str(now))
 
         yield event.plain_result(
-            "🗘 你选择了弃道重修，旧生一切化为尘埃。\n"
+            "🗙 你选择了弃道重修，旧生一切化为尘埃。\n"
             "━━━━━━━━━━━━━━\n"
             "可立刻使用“我要修仙”重新踏上仙途。\n"
             "7天内不可再次重修。"
@@ -489,13 +546,13 @@ class PlayerHandler:
         old_quality = self._get_root_quality(old_root_name)
         new_quality = self._get_root_quality(new_root_name)
         if new_quality > old_quality:
-            result_emoji = "🎰"
+            result_emoji = "🎇"
             result_text = "天命改写，灵根蜕变！"
         elif new_quality < old_quality:
-            result_emoji = "😓"
+            result_emoji = "😧"
             result_text = "造化弄人，灵根退化了。"
         else:
-            result_emoji = "😗"
+            result_emoji = "😜"
             result_text = "命运轮转，灵根发生了更替。"
 
         yield event.plain_result(

@@ -100,6 +100,17 @@ class ShopHandler:
                         return pavilion_id, item
         return None, None
 
+    def _find_black_market_pill(self, item_name: str):
+        """查找是否为黑市可购买丹药。"""
+        all_pills = []
+        all_pills.extend(self.config_manager.pills_data.values())
+        all_pills.extend(self.config_manager.exp_pills_data.values())
+        all_pills.extend(self.config_manager.utility_pills_data.values())
+        for pill in all_pills:
+            if pill.get("name") == item_name:
+                return pill
+        return None
+
     @player_required
     async def handle_buy(self, player: Player, event: AstrMessageEvent, item_name: str = ""):
         """处理购买物品命令"""
@@ -140,6 +151,13 @@ class ShopHandler:
 
         pavilion_id, target_item = await self._find_item_in_pavilions(item_name)
         if not target_item:
+            black_market_pill = self._find_black_market_pill(item_name)
+            if black_market_pill:
+                yield event.plain_result(
+                    f"【{item_name}】当前不在普通商店货架中。\n"
+                    f"若要购买该丹药，请使用：/黑市购买 {item_name}"
+                )
+                return
             yield event.plain_result(f"没有找到【{item_name}】，请检查物品名称或等待刷新。")
             return
 

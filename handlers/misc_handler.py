@@ -1,4 +1,4 @@
-﻿from astrbot.api.event import AstrMessageEvent
+from astrbot.api.event import AstrMessageEvent
 
 from ..data import DataBase
 
@@ -14,12 +14,14 @@ class MiscHandler:
     async def handle_help(self, event: AstrMessageEvent):
         """显示修仙帮助。"""
         help_text = (
-            "\u4fee\u4ed9\u5e2e\u52a9 v3.1.90\n"
+            "\u4fee\u4ed9\u5e2e\u52a9 v3.1.97\n"
             "━━━━━━━━━━━━━━\n"
             "\n"
             "【入门基础】\n"
             "  我要修仙 [灵修/体修]\n"
             "  我的信息\n"
+            "  我的信息优先生成图片卡片，可读取 resources/profile_card 背景素材，失败时自动回退文字版\n"
+            "  当前图片卡片已优化字号、布局与中文字体显示\n"
             "  签到\n"
             "  改道号 <名称>\n"
             "  弃道重修 [确认]\n"
@@ -62,6 +64,7 @@ class MiscHandler:
             "  银行流水\n"
             "  黑市 - 查看黑市丹药\n"
             "  黑市购买 <丹药名> [数量]\n"
+            "  黑市丹药不走普通 /购买，请使用 /黑市购买\n"
             "\n"
             "【战斗竞技】\n"
             "  切磋 <@某人>\n"
