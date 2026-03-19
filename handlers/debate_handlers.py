@@ -23,6 +23,7 @@ class DebateHandlers:
         self.debate_mgr = debate_mgr
 
     def _extract_at_target(self, event: AstrMessageEvent) -> str:
+        """优先从 Discord mentions 和消息链提取目标。"""
         raw_message = getattr(getattr(event, "message_obj", None), "raw_message", None)
         mentions = getattr(raw_message, "mentions", None)
         if mentions:
@@ -31,7 +32,7 @@ class DebateHandlers:
             if mention_id:
                 return str(mention_id)
 
-        message_chain = event.message_obj.message if hasattr(event, "message_obj") and event.message_obj else []
+        message_chain = event.message_obj.message if getattr(event, "message_obj", None) else []
         for component in message_chain:
             if isinstance(component, At):
                 for attr in ("qq", "target", "uin", "user_id"):
@@ -41,7 +42,8 @@ class DebateHandlers:
         return ""
 
     def _extract_plain_text(self, event: AstrMessageEvent) -> str:
-        message_chain = event.message_obj.message if hasattr(event, "message_obj") and event.message_obj else []
+        """提取命令中的纯文本参数。"""
+        message_chain = event.message_obj.message if getattr(event, "message_obj", None) else []
         text_parts = [component.text for component in message_chain if isinstance(component, Plain)]
         text_content = "".join(text_parts).strip()
         for prefix in ("/论道", "论道"):

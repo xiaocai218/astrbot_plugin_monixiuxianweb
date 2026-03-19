@@ -1,4 +1,4 @@
-"""灵石转账处理器。"""
+"""灵石转账指令处理器。"""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ class GoldTransferHandlers:
         self.gold_transfer_mgr = gold_transfer_mgr
 
     def _extract_at_target(self, event: AstrMessageEvent) -> str:
-        """优先从消息链中提取被 @ 的目标。"""
+        """优先从 Discord 原始 mentions 和消息链中提取被 @ 的目标。"""
         raw_message = getattr(getattr(event, "message_obj", None), "raw_message", None)
         mentions = getattr(raw_message, "mentions", None)
         if mentions:
@@ -32,19 +32,18 @@ class GoldTransferHandlers:
             if mention_id:
                 return str(mention_id)
 
-        message_chain = event.message_obj.message if hasattr(event, "message_obj") and event.message_obj else []
+        message_chain = event.message_obj.message if getattr(event, "message_obj", None) else []
         for component in message_chain:
             if isinstance(component, At):
-                for attr in ("qq", "target", "uin"):
-                    if hasattr(component, attr):
-                        value = getattr(component, attr)
-                        if value:
-                            return str(value)
+                for attr in ("qq", "target", "uin", "user_id"):
+                    value = getattr(component, attr, None)
+                    if value:
+                        return str(value)
         return ""
 
     def _extract_plain_text(self, event: AstrMessageEvent) -> str:
-        """提取纯文本参数部分。"""
-        message_chain = event.message_obj.message if hasattr(event, "message_obj") and event.message_obj else []
+        """提取命令中的纯文本参数。"""
+        message_chain = event.message_obj.message if getattr(event, "message_obj", None) else []
         text_parts = [component.text for component in message_chain if isinstance(component, Plain)]
         text_content = "".join(text_parts).strip()
         for prefix in ("/送灵石", "送灵石"):

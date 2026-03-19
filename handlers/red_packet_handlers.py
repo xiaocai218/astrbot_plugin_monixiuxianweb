@@ -22,7 +22,7 @@ class RedPacketHandlers:
 
     def _extract_plain_text(self, event: AstrMessageEvent) -> str:
         """优先从消息链中提取纯文本参数。"""
-        message_chain = event.message_obj.message if hasattr(event, "message_obj") and event.message_obj else []
+        message_chain = event.message_obj.message if getattr(event, "message_obj", None) else []
         text_parts = [component.text for component in message_chain if isinstance(component, Plain)]
         text_content = "".join(text_parts).strip()
         for prefix in ("/发仙缘", "发仙缘"):

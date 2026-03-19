@@ -120,7 +120,7 @@ class DebateManager:
         cooldown_minutes = DEBATE_CONFIG["cooldown_seconds"] // 60
 
         return True, (
-            "📖 论道有所得\n"
+            "论道有所悟\n"
             "━━━━━━━━━━━━━━━\n"
             f"{initiator_name} 与 {target_name} 坐而论道，互相印证修行心得。\n"
             f"双方各获得修为：{reward:,}\n"

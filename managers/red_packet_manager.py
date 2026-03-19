@@ -157,12 +157,11 @@ class RedPacketManager:
         if total_amount < RED_PACKET_CONFIG["min_amount"]:
             return False, f"红包总金额至少需要 {RED_PACKET_CONFIG['min_amount']} 灵石。"
         if count < RED_PACKET_CONFIG["min_count"] or count > RED_PACKET_CONFIG["max_count"]:
-            return (
-                False,
-                f"红包份数需要在 {RED_PACKET_CONFIG['min_count']}-{RED_PACKET_CONFIG['max_count']} 之间。",
+            return False, (
+                f"红包份数需要在 {RED_PACKET_CONFIG['min_count']}-{RED_PACKET_CONFIG['max_count']} 之间。"
             )
         if total_amount < count * RED_PACKET_CONFIG["min_per_packet"]:
-            return False, "红包总金额不足以覆盖每份最少 1 灵石。"
+            return False, "红包总金额不足以覆盖每份至少 1 灵石。"
         if sender.gold < total_amount:
             return False, f"灵石不足，当前仅有 {sender.gold:,} 灵石。"
 
@@ -199,7 +198,7 @@ class RedPacketManager:
 
         return True, (
             "🧧 仙缘红包已发出\n"
-            "━━━━━━━━━━━━━━\n"
+            "━━━━━━━━━━━━━━━\n"
             f"发送者：{sender_name}\n"
             f"总金额：{total_amount:,} 灵石\n"
             f"份数：{count}\n"
@@ -279,7 +278,7 @@ class RedPacketManager:
 
         lines = [
             "🎉 抢到仙缘红包",
-            "━━━━━━━━━━━━━━",
+            "━━━━━━━━━━━━━━━",
             f"发送者：{packet['sender_name']}",
             f"你抢到：{amount:,} 灵石",
             f"你的灵石：{player.gold:,}",
@@ -294,7 +293,7 @@ class RedPacketManager:
         await self.ensure_tables()
         return (
             "🧧 仙缘红包说明\n"
-            "━━━━━━━━━━━━━━\n"
+            "━━━━━━━━━━━━━━━\n"
             "发放格式：/发仙缘 <金额> <份数> [祝福语]\n"
             "领取命令：/抢仙缘\n"
             f"最低金额：{RED_PACKET_CONFIG['min_amount']} 灵石\n"
