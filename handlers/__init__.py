@@ -10,9 +10,11 @@ from .bounty_handlers import BountyHandlers
 from .breakthrough_handler import BreakthroughHandler
 from .combat_handlers import CombatHandlers
 from .dual_cultivation_handlers import DualCultivationHandlers
+from .debate_handlers import DebateHandlers
 from .enlightenment_handlers import EnlightenmentHandlers
 from .equipment_handler import EquipmentHandler
 from .fortune_handlers import FortuneHandlers
+from .gold_transfer_handlers import GoldTransferHandlers
 from .impart_handlers import ImpartHandlers
 from .impart_pk_handlers import ImpartPkHandlers
 from .misc_handler import MiscHandler
@@ -21,6 +23,7 @@ from .pet_handlers import PetHandlers
 from .pill_handler import PillHandler
 from .player_handler import PlayerHandler
 from .ranking_handlers import RankingHandlers
+from .red_packet_handlers import RedPacketHandlers
 from .rift_handlers import RiftHandlers
 from .sect_handlers import SectHandlers
 from .shop_handler import ShopHandler
@@ -40,6 +43,7 @@ __all__ = [
     "BossHandlers",
     "CombatHandlers",
     "RankingHandlers",
+    "RedPacketHandlers",
     "RiftHandlers",
     "AdventureHandlers",
     "AlchemyHandlers",
@@ -53,8 +57,10 @@ __all__ = [
     "BlessedLandHandlers",
     "SpiritFarmHandlers",
     "DualCultivationHandlers",
+    "DebateHandlers",
     "SpiritEyeHandlers",
     "BlackMarketHandler",
     "EnlightenmentHandlers",
     "FortuneHandlers",
+    "GoldTransferHandlers",
 ]

@@ -20,10 +20,12 @@ from .handlers import (
     BountyHandlers,
     BreakthroughHandler,
     CombatHandlers,
+    DebateHandlers,
     DualCultivationHandlers,
     EnlightenmentHandlers,
     EquipmentHandler,
     FortuneHandlers,
+    GoldTransferHandlers,
     ImpartHandlers,
     ImpartPkHandlers,
     MiscHandler,
@@ -32,6 +34,7 @@ from .handlers import (
     PillHandler,
     PlayerHandler,
     RankingHandlers,
+    RedPacketHandlers,
     RiftHandlers,
     SectHandlers,
     ShopHandler,
@@ -47,13 +50,16 @@ from .managers import (
     BossManager,
     BountyManager,
     CombatManager,
+    DebateManager,
     DualCultivationManager,
     EnlightenmentManager,
     FortuneManager,
+    GoldTransferManager,
     ImpartManager,
     ImpartPkManager,
     PetManager,
     RankingManager,
+    RedPacketManager,
     RiftManager,
     SectManager,
     SpiritEyeManager,
@@ -172,6 +178,10 @@ CMD_BANK_LOAN = "贷款"
 CMD_BANK_REPAY = "还款"
 CMD_BANK_TRANSACTIONS = "银行流水"
 CMD_BANK_BREAKTHROUGH_LOAN = "突破贷款"
+CMD_GIFT_GOLD = "送灵石"
+CMD_RED_PACKET_INFO = "仙缘红包"
+CMD_SEND_RED_PACKET = "发仙缘"
+CMD_GRAB_RED_PACKET = "抢仙缘"
 CMD_BLACK_MARKET = "黑市"
 CMD_BLACK_MARKET_BUY = "黑市购买"
 
@@ -219,6 +229,9 @@ CMD_PET_HATCH = "孵化灵宠"
 CMD_PET_IDENTIFY = "鉴定灵宠"
 CMD_PET_EQUIP = "携带灵宠"
 CMD_PET_RELEASE = "释放灵宠"
+
+
+CMD_DEBATE = "论道"
 
 
 class XiuXianPlugin(Star):
@@ -271,8 +284,14 @@ class XiuXianPlugin(Star):
         
         # Phase 2: 灵石银行和悬赏任务
         self.bank_mgr = BankManager(self.db, self.config, self.config_manager)
+        self.gold_transfer_mgr = GoldTransferManager(self.db)
+        self.debate_mgr = DebateManager(self.db)
+        self.red_packet_mgr = RedPacketManager(self.db)
         self.bounty_mgr = BountyManager(self.db, self.storage_ring_mgr)
         self.bank_handlers = BankHandlers(self.db, self.bank_mgr)
+        self.gold_transfer_handlers = GoldTransferHandlers(self.db, self.gold_transfer_mgr)
+        self.debate_handlers = DebateHandlers(self.db, self.debate_mgr)
+        self.red_packet_handlers = RedPacketHandlers(self.db, self.red_packet_mgr)
         self.bounty_handlers = BountyHandlers(self.db, self.bounty_mgr)
         
         # Phase 3: 传承PK
@@ -1179,6 +1198,36 @@ class XiuXianPlugin(Star):
     @require_whitelist
     async def handle_bank_transactions(self, event: AstrMessageEvent):
         async for r in self.bank_handlers.handle_transactions(event):
+            yield r
+
+    @filter.command(CMD_GIFT_GOLD, "给其他玩家送灵石")
+    @require_whitelist
+    async def handle_gift_gold(self, event: AstrMessageEvent, args: str = ""):
+        async for r in self.gold_transfer_handlers.handle_gift_gold(event, args):
+            yield r
+
+    @filter.command(CMD_DEBATE, "论道交流")
+    @require_whitelist
+    async def handle_debate(self, event: AstrMessageEvent, args: str = ""):
+        async for r in self.debate_handlers.handle_debate(event, args):
+            yield r
+
+    @filter.command(CMD_RED_PACKET_INFO, "查看仙缘红包说明")
+    @require_whitelist
+    async def handle_red_packet_info(self, event: AstrMessageEvent):
+        async for r in self.red_packet_handlers.handle_packet_info(event):
+            yield r
+
+    @filter.command(CMD_SEND_RED_PACKET, "发放仙缘红包")
+    @require_whitelist
+    async def handle_send_red_packet(self, event: AstrMessageEvent, args: str = ""):
+        async for r in self.red_packet_handlers.handle_send_packet(event, args):
+            yield r
+
+    @filter.command(CMD_GRAB_RED_PACKET, "领取仙缘红包")
+    @require_whitelist
+    async def handle_grab_red_packet(self, event: AstrMessageEvent):
+        async for r in self.red_packet_handlers.handle_grab_packet(event):
             yield r
 
     @filter.command(CMD_BANK_BREAKTHROUGH_LOAN, "申请突破贷款")

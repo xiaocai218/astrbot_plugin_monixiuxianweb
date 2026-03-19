@@ -5,7 +5,7 @@ from typing import Dict, Callable, Awaitable
 from astrbot.api import logger
 from ..config_manager import ConfigManager
 
-LATEST_DB_VERSION = 21  # v20: user_cd ??? extra_data ??
+LATEST_DB_VERSION = 22  # v22: 持久化仙缘红包表
 
 MIGRATION_TASKS: Dict[int, Callable[[aiosqlite.Connection, ConfigManager], Awaitable[None]]] = {}
 def migration(version: int):
@@ -1139,3 +1139,56 @@ async def _migrate_to_v21(conn: aiosqlite.Connection, config_manager: ConfigMana
     await conn.execute("CREATE INDEX IF NOT EXISTS idx_pets_user ON pets(user_id)")
     await conn.commit()
     logger.info("v21?????????")
+
+
+@migration(22)
+async def _migrate_to_v22(conn: aiosqlite.Connection, config_manager: ConfigManager):
+    """迁移到 v22 - 新增持久化仙缘红包表"""
+    logger.info("开始迁移到 v22：新增持久化仙缘红包表")
+
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS red_packets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            packet_code TEXT NOT NULL UNIQUE,
+            sender_id TEXT NOT NULL,
+            sender_name TEXT NOT NULL DEFAULT '',
+            group_id TEXT NOT NULL,
+            total_amount INTEGER NOT NULL,
+            total_count INTEGER NOT NULL,
+            remaining_amount INTEGER NOT NULL,
+            remaining_count INTEGER NOT NULL,
+            message TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'active',
+            refunded INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            expire_at INTEGER NOT NULL
+        )
+        """
+    )
+    await conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_red_packets_group_status ON red_packets(group_id, status, created_at)"
+    )
+    await conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_red_packets_sender_status ON red_packets(sender_id, status)"
+    )
+
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS red_packet_claims (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            packet_id INTEGER NOT NULL,
+            user_id TEXT NOT NULL,
+            user_name TEXT NOT NULL DEFAULT '',
+            amount INTEGER NOT NULL,
+            claimed_at INTEGER NOT NULL,
+            UNIQUE(packet_id, user_id),
+            FOREIGN KEY(packet_id) REFERENCES red_packets(id) ON DELETE CASCADE
+        )
+        """
+    )
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_red_packet_claims_packet ON red_packet_claims(packet_id)")
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_red_packet_claims_user ON red_packet_claims(user_id)")
+
+    await conn.commit()
+    logger.info("v22 迁移完成：仙缘红包表已创建")
