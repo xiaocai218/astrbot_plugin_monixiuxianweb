@@ -1,6 +1,4 @@
 import argparse
-import json
-import os
 import sqlite3
 import time
 from http import HTTPStatus
@@ -14,9 +12,11 @@ try:
 except ImportError:
     from battle_hp_utils import resolve_player_battle_hp_state
 
-ROOT_DIR = Path(__file__).resolve().parent
-WEB_DIR = ROOT_DIR / "webui"
-CONFIG_DIR = ROOT_DIR / "config"
+try:
+    from .web.common import CONFIG_DIR, ROOT_DIR, WEB_DIR, detect_default_db, load_json_file, load_web_server_config
+except ImportError:
+    from web.common import CONFIG_DIR, ROOT_DIR, WEB_DIR, detect_default_db, load_json_file, load_web_server_config
+
 SECT_POSITIONS = {
     0: "\u5b97\u4e3b",
     1: "\u526f\u5b97\u4e3b",
@@ -49,55 +49,6 @@ FARM_LEVELS = {
     4: {"slots": 12, "upgrade_cost": 150000},
     5: {"slots": 20, "upgrade_cost": 0},
 }
-
-
-def load_json_file(path: Path, default: Any):
-    try:
-        with path.open("r", encoding="utf-8") as fp:
-            return json.load(fp)
-    except Exception:
-        return default
-
-def load_web_server_config() -> dict[str, Any]:
-    config = load_json_file(CONFIG_DIR / "game_config.json", {})
-    web_config = config.get("web_server", {}) if isinstance(config, dict) else {}
-
-    enabled = bool(web_config.get("enabled", False))
-    host = str(web_config.get("host", "0.0.0.0") or "0.0.0.0")
-    try:
-        port = int(web_config.get("port", 8765) or 8765)
-    except (TypeError, ValueError):
-        port = 8765
-
-    return {
-        "enabled": enabled,
-        "host": host,
-        "port": port,
-    }
-
-
-def detect_default_db() -> Path | None:
-    candidates = [
-        ROOT_DIR / "xiuxian_data_lite.db",
-        ROOT_DIR / "xiuxian_data_v2.db",
-    ]
-
-    appdata = os.getenv("APPDATA")
-    if appdata:
-        plugin_dir = Path(appdata) / "AstrBot" / "data" / "astrbot_plugin_monixiuxian2"
-        candidates.extend(
-            [
-                plugin_dir / "xiuxian_data_v2.db",
-                plugin_dir / "xiuxian_data_lite.db",
-            ]
-        )
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return None
-
-
 class WebPreviewRepository:
     def __init__(self, db_path: Path):
         self.db_path = db_path

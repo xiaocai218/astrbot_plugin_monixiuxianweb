@@ -7,7 +7,7 @@ from threading import Thread
 
 from astrbot.api import logger
 
-from ..web_preview_server import WEB_DIR, load_web_server_config
+from .common import WEB_DIR, load_web_server_config
 from .http_handler import PluginWebPreviewHandler
 from .repository import WebPreviewRepository
 

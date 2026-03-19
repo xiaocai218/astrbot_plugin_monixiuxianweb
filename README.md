@@ -1,6 +1,6 @@
 # AstrBot 模拟修仙 v2
 
-> 版本：`v3.2.27`  
+> 版本：`v3.2.28`  
 > 许可证：`AGPL-3.0`  
 > 作者：`xiaojuwa`
 
@@ -77,6 +77,11 @@ python web_preview_server.py --db xiuxian_data_lite.db
 当 `enabled` 为 `false` 时，仍可继续使用命令行脚本单独启动。
 
 ## 最近更新
+
+### v3.2.28
+
+- 新增 `web/common.py`，统一承接 Web 预览的公共路径、JSON 加载与 `web_server` 配置读取。
+- `web/service.py` 与 `web_preview_server.py` 现已共享同一套公共配置入口，继续降低对单文件脚本的耦合。
 
 ### v3.2.27
 
