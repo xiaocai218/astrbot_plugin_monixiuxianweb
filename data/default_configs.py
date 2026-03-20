@@ -15,7 +15,7 @@ SECT_CONFIG = {
 BOSS_CONFIG = {
     "spawn_interval": 3600,
     "levels": [
-        {"name": "练气", "level_index": 0, "hp_mult": 1.0, "atk_mult": 1.0, "reward_mult": 1.0},
+        {"name": "炼气", "level_index": 0, "hp_mult": 1.0, "atk_mult": 1.0, "reward_mult": 1.0},
         {"name": "筑基", "level_index": 3, "hp_mult": 1.5, "atk_mult": 1.2, "reward_mult": 1.5},
         {"name": "金丹", "level_index": 6, "hp_mult": 2.0, "atk_mult": 1.5, "reward_mult": 2.0},
         {"name": "元婴", "level_index": 9, "hp_mult": 2.5, "atk_mult": 1.8, "reward_mult": 2.5},
@@ -32,15 +32,17 @@ RIFT_CONFIG = {
     "open_refresh_interval": 3600,
     "open_chances_by_level": {
         "1": 100,
-        "2": 85,
-        "3": 65,
-        "4": 45,
-        "5": 30,
+        "2": 70,
+        "3": 45,
+        "4": 25,
+        "5": 12,
     },
     "rifts": [
-        {"id": 1, "name": "青云秘境", "level": 2, "exp_range": [100, 500], "gold_range": [50, 200]},
-        {"id": 2, "name": "幽冥鬼域", "level": 5, "exp_range": [500, 2000], "gold_range": [200, 800]},
-        {"id": 3, "name": "太古遗迹", "level": 10, "exp_range": [5000, 10000], "gold_range": [1000, 5000]},
+        {"id": 1, "name": "青云秘境", "level": 1, "required_level": 0, "exp_range": [500, 1500], "gold_range": [200, 800]},
+        {"id": 2, "name": "落日峡谷", "level": 2, "required_level": 5, "exp_range": [1500, 4000], "gold_range": [500, 2000]},
+        {"id": 3, "name": "万妖洞", "level": 3, "required_level": 10, "exp_range": [3000, 8000], "gold_range": [1000, 5000]},
+        {"id": 4, "name": "玄冰地宫", "level": 4, "required_level": 16, "exp_range": [5000, 15000], "gold_range": [2000, 10000]},
+        {"id": 5, "name": "上古遗迹", "level": 5, "required_level": 22, "exp_range": [10000, 30000], "gold_range": [5000, 20000]},
     ],
 }
 

@@ -206,8 +206,10 @@
     },
     "web_server": {
         "enabled": false,
+        "auth_enabled": false,
+        "guest_access": true,
         "host": "0.0.0.0",
         "port": 8765,
-        "comment": "Web???????????"
+        "comment": "Web 只读预览配置：可选启用插件内置启动与轻量鉴权预留层"
     }
 }

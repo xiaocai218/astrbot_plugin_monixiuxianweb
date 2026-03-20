@@ -7,6 +7,7 @@ from threading import Thread
 
 from astrbot.api import logger
 
+from .auth import WebAuthService
 from .common import WEB_DIR, load_web_server_config
 from .http_handler import PluginWebPreviewHandler
 from .repository import WebPreviewRepository
@@ -47,6 +48,7 @@ class WebPreviewService:
         handler_cls = type("RuntimePluginWebPreviewHandler", (PluginWebPreviewHandler,), {})
         handler_cls.repo = WebPreviewRepository(self.db_path)
         handler_cls.db_path = self.db_path
+        handler_cls.auth_service = WebAuthService.from_config(self.db_path)
         handler_cls.service_meta = {
             "mode": "plugin",
             "host": self.host,

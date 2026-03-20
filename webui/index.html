@@ -21,6 +21,32 @@
       </div>
     </header>
 
+    <section class="panel auth-panel">
+      <div class="panel-title-row">
+        <h2>Web 绑定入口</h2>
+        <span id="auth-mode-badge" class="badge">载入中</span>
+      </div>
+      <div class="auth-grid">
+        <div class="auth-column">
+          <div id="auth-status" class="notes compact-notes"></div>
+        </div>
+        <div class="auth-column">
+          <div class="auth-form-card">
+            <label for="bind-code-input">输入绑定码</label>
+            <div class="auth-form-row">
+              <input id="bind-code-input" type="text" maxlength="16" placeholder="例如：ABCD2345">
+              <button id="bind-code-check" type="button">校验绑定码</button>
+              <button id="bind-code-login" type="button">建立只读登录</button>
+              <button id="bind-code-clear" type="button">清除本地会话</button>
+            </div>
+            <p class="muted">当前阶段已支持绑定码换取只读会话，并会自动定位到当前绑定玩家；写操作仍未开放。</p>
+          </div>
+          <div id="bind-code-result" class="notes compact-notes"></div>
+          <div id="web-session-result" class="notes compact-notes"></div>
+        </div>
+      </div>
+    </section>
+
     <main class="layout-grid">
       <section class="panel player-panel">
         <div class="panel-title-row">
@@ -224,3 +250,7 @@
   <script src="/app.js"></script>
 </body>
 </html>
+
+
+
+

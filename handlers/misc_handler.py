@@ -1,4 +1,4 @@
-from astrbot.api.event import AstrMessageEvent
+﻿from astrbot.api.event import AstrMessageEvent
 
 from ..data import DataBase
 
@@ -14,7 +14,7 @@ class MiscHandler:
     async def handle_help(self, event: AstrMessageEvent):
         """显示修仙帮助。"""
         help_text = (
-            "修仙帮助 v3.2.28\n"
+            "修仙帮助 v3.2.50\n"
             "━━━━━━━━━━━━━━━\n"
             "\n"
             "【入门基础】\n"
@@ -66,6 +66,7 @@ class MiscHandler:
             "  仙缘红包\n"
             "  发仙缘 <金额> <份数> [祝福语]\n"
             "  抢仙缘\n"
+            "  网页绑定码 / 绑定网页 <绑定码> / 网页绑定状态\n"
             "  黑市\n"
             "  黑市购买 <丹药名> [数量]\n"
             "\n"
@@ -103,3 +104,5 @@ class MiscHandler:
             "提示：所有指令前请加 / ，例如 /我的信息"
         )
         yield event.plain_result(help_text)
+
+

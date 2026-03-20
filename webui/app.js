@@ -3,6 +3,14 @@ const playerCard = document.getElementById("player-card");
 const rankingList = document.getElementById("ranking-list");
 const worldStats = document.getElementById("world-stats");
 const dbPath = document.getElementById("db-path");
+const authStatus = document.getElementById("auth-status");
+const authModeBadge = document.getElementById("auth-mode-badge");
+const bindCodeInput = document.getElementById("bind-code-input");
+const bindCodeCheck = document.getElementById("bind-code-check");
+const bindCodeLogin = document.getElementById("bind-code-login");
+const bindCodeClear = document.getElementById("bind-code-clear");
+const bindCodeResult = document.getElementById("bind-code-result");
+const webSessionResult = document.getElementById("web-session-result");
 const storageList = document.getElementById("storage-list");
 const storageSummary = document.getElementById("storage-summary");
 const inventorySummary = document.getElementById("inventory-summary");
@@ -45,6 +53,7 @@ let currentTab = "level";
 let currentShopTab = "pill";
 let currentInventoryTab = "equipment";
 let currentDashboard = null;
+let currentSession = null;
 
 function fillNodes(nodes, html) {
   nodes.filter(Boolean).forEach((node) => { node.innerHTML = html; });
@@ -57,6 +66,160 @@ async function fetchJson(url) {
   return data;
 }
 
+function renderAuthStatus(status) {
+  authModeBadge.textContent = status.enabled ? "预留已启用" : "游客只读";
+  authStatus.innerHTML = `
+    <h3>鉴权状态</h3>
+    <div class="bank-desc">${status.message || "当前为游客只读模式。"}</div>
+    <div class="bank-desc">游客访问：${status.guest_access ? "允许" : "关闭"} · 存储就绪：${status.storage_ready ? "是" : "否"}</div>
+    <div class="bank-desc">当前仍不开放网页端写操作，绑定码仅用于后续 Web 登录能力预留。</div>
+  `;
+}
+
+function renderBindCodeResult(payload, isError = false) {
+  if (isError) {
+    bindCodeResult.innerHTML = `<div class="error">${payload}</div>`;
+    return;
+  }
+
+  if (!payload.exists) {
+    bindCodeResult.innerHTML = `
+      <h3>绑定码校验</h3>
+      <div class="bank-desc">${payload.message}</div>
+    `;
+    return;
+  }
+
+  bindCodeResult.innerHTML = `
+    <h3>绑定码校验</h3>
+    <div class="bank-desc">绑定码：<strong>${payload.bind_code}</strong></div>
+    <div class="bank-desc">平台：${payload.platform || "未知"} · 状态：${payload.status}</div>
+    <div class="bank-desc">${payload.message}</div>
+  `;
+}
+
+function renderSessionResult(payload, isError = false) {
+  if (isError) {
+    webSessionResult.innerHTML = `<div class="error">${payload}</div>`;
+    return;
+  }
+
+  if (!payload.authenticated) {
+    currentSession = null;
+    webSessionResult.innerHTML = `
+      <h3>登录会话</h3>
+      <div class="bank-desc">${payload.message}</div>
+    `;
+    return;
+  }
+
+  const roleLine = payload.player_name
+    ? `<div class="bank-desc">当前绑定玩家：<strong>${payload.player_name}</strong>${payload.level_name ? ` · ${payload.level_name}` : ""}${payload.cultivation_type ? ` · ${payload.cultivation_type}` : ""}</div>`
+    : `<div class="bank-desc">当前绑定玩家：尚未在当前页面定位到角色，可稍后刷新重试。</div>`;
+
+  webSessionResult.innerHTML = `
+    <h3>登录会话</h3>
+    ${roleLine}
+    <div class="bank-desc">玩家 ID：<strong>${payload.user_id}</strong></div>
+    <div class="bank-desc">平台：${payload.platform} · 剩余约 ${payload.remaining_minutes} 分钟</div>
+    <div class="bank-desc">${payload.message}</div>
+  `;
+}
+
+async function loadAuthStatus() {
+  try {
+    const status = await fetchJson("/api/auth/status");
+    renderAuthStatus(status);
+  } catch (error) {
+    authModeBadge.textContent = "状态异常";
+    authStatus.innerHTML = `<div class="error">${error.message}</div>`;
+  }
+}
+
+async function checkBindCode() {
+  const code = (bindCodeInput.value || "").trim().toUpperCase();
+  if (!code) {
+    renderBindCodeResult("请输入绑定码，例如 ABCD2345。", true);
+    return;
+  }
+  bindCodeResult.innerHTML = `<div class="empty">正在校验绑定码...</div>`;
+  try {
+    const payload = await fetchJson(`/api/auth/bind-code?code=${encodeURIComponent(code)}`);
+    renderBindCodeResult(payload);
+  } catch (error) {
+    renderBindCodeResult(error.message, true);
+  }
+}
+
+async function loginWithBindCode() {
+  const code = (bindCodeInput.value || "").trim().toUpperCase();
+  if (!code) {
+    renderSessionResult("请输入绑定码后再建立登录会话。", true);
+    return;
+  }
+  webSessionResult.innerHTML = `<div class="empty">正在建立只读登录会话...</div>`;
+  try {
+    const loginPayload = await fetchJson(`/api/auth/login?code=${encodeURIComponent(code)}`);
+    localStorage.setItem("xiuxian_web_token", loginPayload.token);
+    const sessionPayload = await fetchJson(`/api/auth/session?token=${encodeURIComponent(loginPayload.token)}`);
+    currentSession = sessionPayload;
+    renderSessionResult(sessionPayload);
+    await bootstrap();
+  } catch (error) {
+    renderSessionResult(error.message, true);
+  }
+}
+
+async function restoreSession() {
+  const token = localStorage.getItem("xiuxian_web_token") || "";
+  if (!token) {
+    webSessionResult.innerHTML = `
+      <h3>登录会话</h3>
+      <div class="bank-desc">当前还没有 Web 只读登录会话，可先在聊天端完成绑定后再在这里换取会话。</div>
+    `;
+    return;
+  }
+  try {
+    const payload = await fetchJson(`/api/auth/session?token=${encodeURIComponent(token)}`);
+    currentSession = payload;
+    renderSessionResult(payload);
+  } catch (error) {
+    localStorage.removeItem("xiuxian_web_token");
+    renderSessionResult(error.message, true);
+  }
+}
+
+function clearSession() {
+  localStorage.removeItem("xiuxian_web_token");
+  currentSession = null;
+  playerSelect.disabled = false;
+  renderSessionResult({ authenticated: false, message: "已清除本地只读会话，当前回到游客浏览状态。" });
+}
+
+function syncSessionPlayer(players) {
+  if (!currentSession || !currentSession.authenticated) {
+    playerSelect.disabled = false;
+    return false;
+  }
+  const matched = players.find((player) => String(player.user_id) === String(currentSession.user_id));
+  if (!matched) {
+    playerSelect.disabled = false;
+    renderSessionResult({ ...currentSession, message: "当前会话有效，但未在当前数据库中找到对应角色。" });
+    return false;
+  }
+  currentSession = {
+    ...currentSession,
+    player_name: matched.name,
+    level_name: matched.level_name,
+    cultivation_type: matched.cultivation_type,
+    message: "当前 Web 会话有效，已自动定位到绑定玩家的只读视图。",
+  };
+  playerSelect.value = matched.user_id;
+  playerSelect.disabled = true;
+  renderSessionResult(currentSession);
+  return true;
+}
+
 function renderWorld(world) {
   worldStats.innerHTML = "";
   [["修士总数", world.player_count], ["宗门数量", world.sect_count], ["秘境数量", world.rift_count]].forEach(([label, value]) => {
@@ -66,7 +229,6 @@ function renderWorld(world) {
     worldStats.appendChild(card);
   });
 }
-
 function kvCard(label, value) {
   return `<article class="kv-card"><span class="kv-label">${label}</span><strong class="kv-value">${value}</strong></article>`;
 }
@@ -548,6 +710,8 @@ async function loadDashboard(userId) {
 
 async function bootstrap() {
   try {
+    await loadAuthStatus();
+    await restoreSession();
     const health = await fetchJson("/api/health");
     dbPath.textContent = `数据库：${health.db_path}`;
     const data = await fetchJson("/api/players");
@@ -560,7 +724,8 @@ async function bootstrap() {
       return;
     }
     playerSelect.innerHTML = data.players.map((player) => `<option value="${player.user_id}">${player.name} · ${player.level_name} · ${player.cultivation_type}</option>`).join("");
-    await loadDashboard(playerSelect.value);
+    const lockedToSession = syncSessionPlayer(data.players);
+    await loadDashboard(lockedToSession ? currentSession.user_id : playerSelect.value);
   } catch (error) {
     const html = `<div class="error">${error.message}</div>`;
     fillNodes([playerCard, storageList, inventorySummary, inventoryList, shopList, rankingList, riftOpenList, riftClosedList, bossActive, bossHistory, bankOverview, bankTransactions, blessedLandCurrent, blessedLandRules, blessedLandOptions, adventureStatus, adventureRoutes, spiritFarmCurrent, spiritFarmCrops, spiritFarmHerbs, spiritEyeCurrent, spiritEyeList, dualCurrent, dualRules, dualRequest, sectPlayer, sectRankingList, sectMembers, bountyActive, bountyAvailable, bountyRecent], html);
@@ -569,7 +734,47 @@ async function bootstrap() {
 }
 
 playerSelect.addEventListener("change", () => { if (playerSelect.value) loadDashboard(playerSelect.value); });
+if (bindCodeCheck) {
+  bindCodeCheck.addEventListener("click", checkBindCode);
+}
+if (bindCodeLogin) {
+  bindCodeLogin.addEventListener("click", loginWithBindCode);
+}
+if (bindCodeClear) {
+  bindCodeClear.addEventListener("click", clearSession);
+}
+if (bindCodeInput) {
+  bindCodeInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (event.shiftKey) {
+        loginWithBindCode();
+      } else {
+        checkBindCode();
+      }
+    }
+  });
+}
 tabs.forEach((tab) => tab.addEventListener("click", () => { tabs.forEach((item) => item.classList.remove("is-active")); tab.classList.add("is-active"); currentTab = tab.dataset.tab; renderRankings(); }));
 shopTabs.forEach((tab) => tab.addEventListener("click", () => { shopTabs.forEach((item) => item.classList.remove("is-active")); tab.classList.add("is-active"); currentShopTab = tab.dataset.shopTab; renderShop(); }));
 inventoryTabs.forEach((tab) => tab.addEventListener("click", () => { inventoryTabs.forEach((item) => item.classList.remove("is-active")); tab.classList.add("is-active"); currentInventoryTab = tab.dataset.inventoryTab; if (currentDashboard) renderInventory(currentDashboard.inventory_preview); }));
 bootstrap();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

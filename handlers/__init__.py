@@ -30,6 +30,7 @@ from .shop_handler import ShopHandler
 from .spirit_eye_handlers import SpiritEyeHandlers
 from .spirit_farm_handlers import SpiritFarmHandlers
 from .storage_ring_handler import StorageRingHandler
+from .web_binding_handlers import WebBindingHandlers
 
 __all__ = [
     "PlayerHandler",
@@ -63,4 +64,5 @@ __all__ = [
     "EnlightenmentHandlers",
     "FortuneHandlers",
     "GoldTransferHandlers",
+    "WebBindingHandlers",
 ]

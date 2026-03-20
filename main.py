@@ -41,6 +41,7 @@ from .handlers import (
     SpiritEyeHandlers,
     SpiritFarmHandlers,
     StorageRingHandler,
+    WebBindingHandlers,
 )
 from .managers import (
     AdventureManager,
@@ -64,6 +65,7 @@ from .managers import (
     SectManager,
     SpiritEyeManager,
     SpiritFarmManager,
+    WebBindingManager,
 )
 from .web import WebPreviewService
 
@@ -233,6 +235,9 @@ CMD_PET_RELEASE = "释放灵宠"
 
 
 CMD_DEBATE = "论道"
+CMD_WEB_BIND_CODE = "网页绑定码"
+CMD_WEB_BIND = "绑定网页"
+CMD_WEB_BIND_STATUS = "网页绑定状态"
 
 
 class XiuXianPlugin(Star):
@@ -288,11 +293,13 @@ class XiuXianPlugin(Star):
         self.gold_transfer_mgr = GoldTransferManager(self.db)
         self.debate_mgr = DebateManager(self.db)
         self.red_packet_mgr = RedPacketManager(self.db)
+        self.web_binding_mgr = WebBindingManager(self.db)
         self.bounty_mgr = BountyManager(self.db, self.storage_ring_mgr)
         self.bank_handlers = BankHandlers(self.db, self.bank_mgr)
         self.gold_transfer_handlers = GoldTransferHandlers(self.db, self.gold_transfer_mgr)
         self.debate_handlers = DebateHandlers(self.db, self.debate_mgr)
         self.red_packet_handlers = RedPacketHandlers(self.db, self.red_packet_mgr)
+        self.web_binding_handlers = WebBindingHandlers(self.db, self.web_binding_mgr)
         self.bounty_handlers = BountyHandlers(self.db, self.bounty_mgr)
         
         # Phase 3: 传承PK
@@ -1223,6 +1230,24 @@ class XiuXianPlugin(Star):
     @require_whitelist
     async def handle_debate(self, event: AstrMessageEvent, args: str = ""):
         async for r in self.debate_handlers.handle_debate(event, args):
+            yield r
+
+    @filter.command(CMD_WEB_BIND_CODE, "生成网页绑定码")
+    @require_whitelist
+    async def handle_web_bind_code(self, event: AstrMessageEvent):
+        async for r in self.web_binding_handlers.handle_generate_bind_code(event):
+            yield r
+
+    @filter.command(CMD_WEB_BIND, "使用绑定码完成网页绑定")
+    @require_whitelist
+    async def handle_web_bind(self, event: AstrMessageEvent, args: str = ""):
+        async for r in self.web_binding_handlers.handle_bind_web(event, args):
+            yield r
+
+    @filter.command(CMD_WEB_BIND_STATUS, "查看网页绑定状态")
+    @require_whitelist
+    async def handle_web_bind_status(self, event: AstrMessageEvent):
+        async for r in self.web_binding_handlers.handle_binding_status(event):
             yield r
 
     @filter.command(CMD_RED_PACKET_INFO, "查看仙缘红包说明")

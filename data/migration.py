@@ -5,7 +5,7 @@ from typing import Dict, Callable, Awaitable
 from astrbot.api import logger
 from ..config_manager import ConfigManager
 
-LATEST_DB_VERSION = 22  # v22: 持久化仙缘红包表
+LATEST_DB_VERSION = 26  # v26: 新增 Web 绑定与鉴权预留数据表
 
 MIGRATION_TASKS: Dict[int, Callable[[aiosqlite.Connection, ConfigManager], Awaitable[None]]] = {}
 def migration(version: int):
@@ -160,6 +160,62 @@ async def _ensure_schema_compatibility(conn: aiosqlite.Connection) -> None:
             )
     except Exception as e:
         logger.warning(f"兼容性修复 spirit_eyes 表失败: {e}")
+
+    try:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_bind_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bind_code TEXT NOT NULL UNIQUE,
+                user_id TEXT NOT NULL,
+                platform TEXT NOT NULL DEFAULT '',
+                chat_id TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at INTEGER NOT NULL,
+                expire_at INTEGER NOT NULL,
+                used_at INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_bind_keys_user_status ON web_bind_keys(user_id, status)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_bind_keys_expire ON web_bind_keys(expire_at)")
+
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_chat_bindings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                platform TEXT NOT NULL,
+                chat_user_id TEXT NOT NULL,
+                chat_user_name TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                UNIQUE(platform, chat_user_id),
+                UNIQUE(user_id, platform)
+            )
+            """
+        )
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_chat_bindings_user ON web_chat_bindings(user_id)")
+
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT NOT NULL UNIQUE,
+                user_id TEXT NOT NULL,
+                platform TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL,
+                expire_at INTEGER NOT NULL,
+                last_used_at INTEGER NOT NULL DEFAULT 0,
+                revoked INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_tokens_user_revoked ON web_tokens(user_id, revoked)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_tokens_expire ON web_tokens(expire_at)")
+        changed = True
+    except Exception as e:
+        logger.warning(f"Web 鉴权预留表兼容性修复失败: {e}")
 
     if changed:
         await conn.commit()
@@ -643,6 +699,58 @@ async def _create_all_tables_v2(conn: aiosqlite.Connection):
         )
     """)
     await conn.execute("CREATE INDEX IF NOT EXISTS idx_pets_user ON pets(user_id)")
+
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS web_bind_keys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bind_code TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            platform TEXT NOT NULL DEFAULT '',
+            chat_id TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at INTEGER NOT NULL,
+            expire_at INTEGER NOT NULL,
+            used_at INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_bind_keys_user_status ON web_bind_keys(user_id, status)")
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_bind_keys_expire ON web_bind_keys(expire_at)")
+
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS web_chat_bindings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            chat_user_id TEXT NOT NULL,
+            chat_user_name TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            UNIQUE(platform, chat_user_id),
+            UNIQUE(user_id, platform)
+        )
+        """
+    )
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_chat_bindings_user ON web_chat_bindings(user_id)")
+
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS web_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            platform TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL,
+            expire_at INTEGER NOT NULL,
+            last_used_at INTEGER NOT NULL DEFAULT 0,
+            revoked INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_tokens_user_revoked ON web_tokens(user_id, revoked)")
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_tokens_expire ON web_tokens(expire_at)")
 
     logger.info("数据库表已创建完成（v2 - 完整修仙系统）")
 
@@ -1143,8 +1251,8 @@ async def _migrate_to_v21(conn: aiosqlite.Connection, config_manager: ConfigMana
 
 @migration(22)
 async def _migrate_to_v22(conn: aiosqlite.Connection, config_manager: ConfigManager):
-    """迁移到 v22 - 新增持久化仙缘红包表"""
-    logger.info("开始迁移到 v22：新增持久化仙缘红包表")
+    """???v22 - ??????????"""
+    logger.info("????? v22???????????")
 
     await conn.execute(
         """
@@ -1191,4 +1299,154 @@ async def _migrate_to_v22(conn: aiosqlite.Connection, config_manager: ConfigMana
     await conn.execute("CREATE INDEX IF NOT EXISTS idx_red_packet_claims_user ON red_packet_claims(user_id)")
 
     await conn.commit()
-    logger.info("v22 迁移完成：仙缘红包表已创建")
+    logger.info("v22 ?????????????")
+
+
+@migration(23)
+async def _migrate_to_v23(conn: aiosqlite.Connection, config_manager: ConfigManager):
+    """迁移到v23 - 合理化默认秘境门槛与开放节奏"""
+    logger.info("开始迁移到 v23：合理化默认秘境门槛与开放节奏")
+
+    import json
+
+    default_rifts = [
+        (1, "青云秘境", 1, 0, json.dumps({"exp": [500, 1500], "gold": [200, 800]}, ensure_ascii=False)),
+        (2, "落日峡谷", 2, 5, json.dumps({"exp": [1500, 4000], "gold": [500, 2000]}, ensure_ascii=False)),
+        (3, "万妖洞", 3, 10, json.dumps({"exp": [3000, 8000], "gold": [1000, 5000]}, ensure_ascii=False)),
+        (4, "玄冰地宫", 4, 16, json.dumps({"exp": [5000, 15000], "gold": [2000, 10000]}, ensure_ascii=False)),
+        (5, "上古遗迹", 5, 22, json.dumps({"exp": [10000, 30000], "gold": [5000, 20000]}, ensure_ascii=False)),
+    ]
+
+    for rift_id, rift_name, rift_level, required_level, rewards in default_rifts:
+        await conn.execute(
+            """
+            INSERT INTO rifts (rift_id, rift_name, rift_level, required_level, rewards)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(rift_id) DO UPDATE SET
+                rift_name = excluded.rift_name,
+                rift_level = excluded.rift_level,
+                required_level = excluded.required_level,
+                rewards = excluded.rewards
+            """,
+            (rift_id, rift_name, rift_level, required_level, rewards),
+        )
+
+    await conn.commit()
+    logger.info("v23 迁移完成：默认秘境门槛与奖励区间已更新")
+
+
+@migration(24)
+async def _migrate_to_v24(conn: aiosqlite.Connection, config_manager: ConfigManager):
+    """迁移到v24 - 修复默认秘境名称错误写入"""
+    logger.info("开始迁移到 v24：修复默认秘境名称错误写入")
+
+    fixed_rift_names = [
+        (1, "青云秘境"),
+        (2, "落日峡谷"),
+        (3, "万妖洞"),
+        (4, "玄冰地宫"),
+        (5, "上古遗迹"),
+    ]
+
+    for rift_id, rift_name in fixed_rift_names:
+        await conn.execute(
+            "UPDATE rifts SET rift_name = ? WHERE rift_id = ?",
+            (rift_name, rift_id),
+        )
+
+    await conn.commit()
+    logger.info("v24 迁移完成：默认秘境名称已修复")
+
+
+@migration(25)
+async def _migrate_to_v25(conn: aiosqlite.Connection, config_manager: ConfigManager):
+    """迁移到v25 - 完整修复默认秘境名称、门槛与奖励区间"""
+    logger.info("开始迁移到 v25：完整修复默认秘境名称、门槛与奖励区间")
+
+    import json
+
+    fixed_rifts = [
+        (1, "青云秘境", 1, 0, json.dumps({"exp": [500, 1500], "gold": [200, 800]}, ensure_ascii=False)),
+        (2, "落日峡谷", 2, 5, json.dumps({"exp": [1500, 4000], "gold": [500, 2000]}, ensure_ascii=False)),
+        (3, "万妖洞", 3, 10, json.dumps({"exp": [3000, 8000], "gold": [1000, 5000]}, ensure_ascii=False)),
+        (4, "玄冰地宫", 4, 16, json.dumps({"exp": [5000, 15000], "gold": [2000, 10000]}, ensure_ascii=False)),
+        (5, "上古遗迹", 5, 22, json.dumps({"exp": [10000, 30000], "gold": [5000, 20000]}, ensure_ascii=False)),
+    ]
+
+    for rift_id, rift_name, rift_level, required_level, rewards in fixed_rifts:
+        await conn.execute(
+            """
+            INSERT INTO rifts (rift_id, rift_name, rift_level, required_level, rewards)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(rift_id) DO UPDATE SET
+                rift_name = excluded.rift_name,
+                rift_level = excluded.rift_level,
+                required_level = excluded.required_level,
+                rewards = excluded.rewards
+            """,
+            (rift_id, rift_name, rift_level, required_level, rewards),
+        )
+
+    await conn.commit()
+    logger.info("v25 迁移完成：默认秘境名称、门槛与奖励区间已校正")
+
+
+@migration(26)
+async def _migrate_to_v26(conn: aiosqlite.Connection, config_manager: ConfigManager):
+    """迁移到 v26 - 新增 Web 绑定与鉴权预留数据表"""
+    logger.info("开始迁移到 v26：新增 Web 绑定与鉴权预留数据表")
+
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS web_bind_keys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bind_code TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            platform TEXT NOT NULL DEFAULT '',
+            chat_id TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at INTEGER NOT NULL,
+            expire_at INTEGER NOT NULL,
+            used_at INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_bind_keys_user_status ON web_bind_keys(user_id, status)")
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_bind_keys_expire ON web_bind_keys(expire_at)")
+
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS web_chat_bindings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            chat_user_id TEXT NOT NULL,
+            chat_user_name TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            UNIQUE(platform, chat_user_id),
+            UNIQUE(user_id, platform)
+        )
+        """
+    )
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_chat_bindings_user ON web_chat_bindings(user_id)")
+
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS web_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            platform TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL,
+            expire_at INTEGER NOT NULL,
+            last_used_at INTEGER NOT NULL DEFAULT 0,
+            revoked INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_tokens_user_revoked ON web_tokens(user_id, revoked)")
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_web_tokens_expire ON web_tokens(expire_at)")
+
+    await conn.commit()
+    logger.info("v26 迁移完成：Web 绑定与鉴权预留数据表已创建")

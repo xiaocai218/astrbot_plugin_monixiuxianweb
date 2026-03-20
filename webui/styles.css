@@ -26,6 +26,14 @@ body {
   box-shadow: var(--shadow);
 }
 .hero { display: flex; justify-content: space-between; gap: 24px; padding: 28px 32px; margin-bottom: 24px; }
+.auth-panel { margin-bottom: 24px; }
+.auth-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.auth-column { min-width: 0; }
+.auth-form-card { padding: 18px; border-radius: 18px; background: rgba(19, 17, 35, 0.96); border: 1px solid rgba(231, 189, 99, 0.14); }
+.auth-form-card label { display: block; margin-bottom: 10px; color: var(--gold); font-weight: 700; }
+.auth-form-row { display: flex; gap: 10px; align-items: center; }
+.auth-form-row input { flex: 1; min-width: 0; padding: 14px 16px; border: 1px solid rgba(105, 216, 247, 0.25); border-radius: 14px; color: var(--text); background: #120f24; font-size: 15px; }
+.auth-form-row button { padding: 14px 18px; border-radius: 14px; border: 1px solid rgba(231, 189, 99, 0.28); background: rgba(85, 64, 21, 0.35); color: var(--gold); cursor: pointer; }
 .eyebrow { margin: 0 0 8px; color: var(--gold); letter-spacing: 0.08em; }
 .hero h1 { margin: 0 0 10px; font-size: clamp(28px, 4vw, 44px); }
 .hero-text, .muted { color: var(--muted); }
@@ -80,11 +88,14 @@ select { width: 100%; padding: 14px 16px; border: 1px solid rgba(105, 216, 247, 
 @media (max-width: 1024px) {
   .layout-grid { grid-template-columns: 1fr; }
   .player-panel { grid-row: auto; }
-  .hero { flex-direction: column; }
+.hero { flex-direction: column; }
+  .auth-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
   .app-shell { width: min(100vw - 20px, 1480px); margin: 10px auto 24px; }
   .hero, .panel { padding: 18px; border-radius: 20px; }
   .stats-grid, .detail-grid, .equipment-grid, .storage-row { grid-template-columns: 1fr; }
-  .panel-title-row, .shop-head, .rift-head, .boss-head, .bank-head, .inventory-head, .sect-head, .bounty-head { flex-direction: column; align-items: flex-start; }
+.panel-title-row, .shop-head, .rift-head, .boss-head, .bank-head, .inventory-head, .sect-head, .bounty-head { flex-direction: column; align-items: flex-start; }
+  .auth-form-row { flex-direction: column; align-items: stretch; }
 }
+

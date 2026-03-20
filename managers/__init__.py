@@ -23,6 +23,7 @@ from .rift_manager import RiftManager
 from .sect_manager import SectManager
 from .spirit_eye_manager import SpiritEyeManager
 from .spirit_farm_manager import SpiritFarmManager
+from .web_binding_manager import WebBindingManager
 
 __all__ = [
     "CombatManager",
@@ -50,4 +51,5 @@ __all__ = [
     "EnlightenmentManager",
     "FortuneManager",
     "GoldTransferManager",
+    "WebBindingManager",
 ]

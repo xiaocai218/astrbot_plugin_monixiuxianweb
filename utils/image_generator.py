@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """个人信息图片卡片生成器。"""
 
 import asyncio

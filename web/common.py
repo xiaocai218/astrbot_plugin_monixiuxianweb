@@ -29,11 +29,15 @@ def load_web_server_config() -> dict[str, Any]:
         port = int(web_config.get("port", 8765) or 8765)
     except (TypeError, ValueError):
         port = 8765
+    auth_enabled = bool(web_config.get("auth_enabled", False))
+    guest_access = bool(web_config.get("guest_access", True))
 
     return {
         "enabled": enabled,
         "host": host,
         "port": port,
+        "auth_enabled": auth_enabled,
+        "guest_access": guest_access,
     }
 
 

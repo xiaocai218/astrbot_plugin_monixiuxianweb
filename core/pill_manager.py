@@ -134,6 +134,11 @@ class PillManager:
         effect_type = pill_data.get("effect_type", "instant")
         subtype = pill_data.get("subtype", "")
 
+        if subtype == "breakthrough":
+            return False, (
+                f"【{pill_name}】属于突破类丹药，不能通过普通“服用丹药”直接使用。\n"
+                f"请在突破时使用：/突破 {pill_name}"
+            )
         if subtype == "exp":
             # 修为丹
             return await self._use_exp_pill(player, pill_name, pill_data)

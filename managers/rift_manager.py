@@ -1,4 +1,4 @@
-"""
+﻿"""
 秘境系统管理器 - 处理秘境探索、开放状态与奖励逻辑。
 """
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class RiftManager:
-    """秘境系统管理器"""
+    """秘境系统管理器。"""
 
     DEFAULT_DURATION = 1800
 
@@ -96,9 +96,11 @@ class RiftManager:
                 return self.config_manager.level_data[level_index].get("level_name", f"境界{level_index}")
 
         level_names = [
-            "练气期一层", "练气期二层", "练气期三层", "练气期四层", "练气期五层",
-            "练气期六层", "练气期七层", "练气期八层", "练气期九层", "练气期十层",
+            "炼气期一层", "炼气期二层", "炼气期三层", "炼气期四层", "炼气期五层",
+            "炼气期六层", "炼气期七层", "炼气期八层", "炼气期九层", "炼气期十层",
             "筑基期初期", "筑基期中期", "筑基期后期", "金丹期初期", "金丹期中期", "金丹期后期",
+            "元婴期初期", "元婴期中期", "元婴期后期", "化神期初期", "化神期中期", "化神期后期",
+            "炼虚期初期", "炼虚期中期", "炼虚期后期",
         ]
         if 0 <= level_index < len(level_names):
             return level_names[level_index]
@@ -163,7 +165,7 @@ class RiftManager:
 
     async def list_rifts(self) -> Tuple[bool, str]:
         all_rifts = await self.db.ext.get_all_rifts()
-        rifts, next_refresh = await self._get_current_open_rifts(all_rifts)
+        open_rifts, next_refresh = await self._get_current_open_rifts(all_rifts)
 
         if not all_rifts:
             return False, "❌ 当前没有秘境数据！"
@@ -172,7 +174,7 @@ class RiftManager:
         msg += "━━━━━━━━━━\n"
         msg += "【本轮开放】\n"
 
-        for rift in rifts:
+        for rift in open_rifts:
             rewards_dict = rift.get_rewards()
             exp_range = rewards_dict.get("exp", [0, 0])
             gold_range = rewards_dict.get("gold", [0, 0])
@@ -185,9 +187,9 @@ class RiftManager:
                 msg += f"  等级要求：{level_name} 及以上\n"
             msg += f"  修为奖励：{exp_range[0]:,}-{exp_range[1]:,}\n"
             msg += f"  灵石奖励：{gold_range[0]:,}-{gold_range[1]:,}\n"
-            msg += f"  开放概率：{self._get_open_chance_by_level(rift.rift_level)}%\n\n"
+            msg += f"  开放概率：{self._get_open_chance_by_level(rift.rift_level)}%\n"
 
-        closed_rifts = [rift for rift in all_rifts if all(open_rift.rift_id != rift.rift_id for open_rift in rifts)]
+        closed_rifts = [rift for rift in all_rifts if all(open_rift.rift_id != rift.rift_id for open_rift in open_rifts)]
         if closed_rifts:
             msg += "【暂未开放】\n"
             for rift in closed_rifts:
@@ -197,7 +199,6 @@ class RiftManager:
                     msg += " - 暂未开放\n"
                 else:
                     msg += f" - 需 {level_name}，暂未开放\n"
-            msg += "\n"
 
         remaining = max(0, next_refresh - int(time.time()))
         msg += f"🔁 下一轮刷新：约 {remaining // 60} 分钟后\n"
@@ -215,16 +216,16 @@ class RiftManager:
             user_cd = await self.db.ext.get_user_cd(user_id)
 
         if user_cd.type != UserStatus.IDLE:
-            return False, f"❌ 你当前正{UserStatus.get_name(user_cd.type)}，无法探索秘境！"
+            return False, "❌ 你当前正在忙碌，无法探索秘境！"
 
         rift = await self.db.ext.get_rift_by_id(rift_id)
         if not rift:
-            return False, "❌ 秘境不存在！使用 /秘境列表 查看可用秘境"
+            return False, "❌ 秘境不存在！请使用 /秘境列表 查看可用秘境。"
 
         open_rifts, next_refresh = await self._get_current_open_rifts(await self.db.ext.get_all_rifts())
         if not any(open_rift.rift_id == rift_id for open_rift in open_rifts):
             remaining = max(0, next_refresh - int(time.time()))
-            return False, f"❌ 该秘境当前未开放，请等待约 {remaining // 60} 分钟后查看下一轮开放情况"
+            return False, f"❌ 该秘境当前未开放，请等待约 {remaining // 60} 分钟后查看下一轮开放情况。"
 
         if player.level_index < rift.required_level:
             level_name = self._get_level_name(rift.required_level)
@@ -236,7 +237,7 @@ class RiftManager:
 
         return True, (
             f"✅ 你进入了【{rift.rift_name}】！探索需要 {self.explore_duration // 60} 分钟。\n"
-            "使用 /完成探索 领取奖励"
+            "使用 /完成探索 领取奖励。"
         )
 
     async def finish_exploration(self, user_id: str) -> Tuple[bool, str, Optional[Dict]]:
@@ -253,17 +254,17 @@ class RiftManager:
             remaining = user_cd.scheduled_time - current_time
             return False, f"❌ 探索尚未完成！还需要 {remaining // 60} 分钟。", None
 
-        extra_data = user_cd.get_extra_data() if hasattr(user_cd, "get_extra_data") else {}
-        rift_id = extra_data.get("rift_id", 0)
-        rift_level = extra_data.get("rift_level", 1)
+        extra_data = user_cd.get_extra_data() if hasattr(user_cd, 'get_extra_data') else {}
+        rift_id = extra_data.get('rift_id', 0)
+        rift_level = extra_data.get('rift_level', 1)
 
         rift = await self.db.ext.get_rift_by_id(rift_id) if rift_id else None
-        rift_name = rift.rift_name if rift else "未知秘境"
+        rift_name = rift.rift_name if rift else '未知秘境'
 
         if rift:
             rewards_config = rift.get_rewards()
-            exp_range = rewards_config.get("exp", [1000, 5000])
-            gold_range = rewards_config.get("gold", [500, 2000])
+            exp_range = rewards_config.get('exp', [1000, 5000])
+            gold_range = rewards_config.get('gold', [500, 2000])
             exp_reward = random.randint(exp_range[0], exp_range[1])
             gold_reward = random.randint(gold_range[0], gold_range[1])
             rift_level = rift.rift_level
@@ -274,14 +275,14 @@ class RiftManager:
         events = [
             {"desc": "你发现了一处灵泉，修为大增！", "item_chance": 70},
             {"desc": "你在秘境中击败了一只妖兽！", "item_chance": 80},
-            {"desc": "你找到了一个隐藏的宝箱！", "item_chance": 100},
+            {"desc": "你找到了一只隐藏的宝箱！", "item_chance": 100},
             {"desc": "你领悟了一些修炼心得。", "item_chance": 40},
             {"desc": "你在秘境中遇到了前辈留下的传承！", "item_chance": 90},
         ]
         event = random.choice(events)
 
-        dropped_items = await self._roll_rift_drops(player, rift_level, event["item_chance"])
-        item_msg = ""
+        dropped_items = await self._roll_rift_drops(player, rift_level, event['item_chance'])
+        item_msg = ''
         if dropped_items:
             item_lines = []
             for item_name, count in dropped_items:
@@ -295,7 +296,7 @@ class RiftManager:
                     if success:
                         item_lines.append(f"  - {item_name} x{count}")
                     else:
-                        item_lines.append(f"  - {item_name} x{count}（储物戒已满，丢失）")
+                        item_lines.append(f"  - {item_name} x{count}（储物戒已满，已丢失）")
                 else:
                     item_lines.append(f"  - {item_name} x{count}（无法存储）")
 
@@ -311,16 +312,16 @@ class RiftManager:
             f"🌀 探索完成 - {rift_name}\n"
             f"━━━━━━━━━━\n"
             f"{event['desc']}\n\n"
-            f"获得修为：+{exp_reward:,}\n"
-            f"获得灵石：+{gold_reward:,}{item_msg}"
+            f"获得修为：{exp_reward:,}\n"
+            f"获得灵石：{gold_reward:,}{item_msg}"
         )
 
         reward_data = {
-            "exp": exp_reward,
-            "gold": gold_reward,
-            "event": event["desc"],
-            "items": dropped_items,
-            "rift_name": rift_name,
+            'exp': exp_reward,
+            'gold': gold_reward,
+            'event': event['desc'],
+            'items': dropped_items,
+            'rift_name': rift_name,
         }
         return True, msg, reward_data
 
@@ -341,41 +342,29 @@ class RiftManager:
             return self.config_manager.is_pill(item_name)
         return False
 
-    def _get_rift_level_by_player(self, player: Player) -> int:
-        level_index = player.level_index
-        if level_index <= 5:
-            return 1
-        if level_index <= 12:
-            return 2
-        if level_index <= 18:
-            return 3
-        if level_index <= 24:
-            return 4
-        return 5
-
     async def _roll_rift_drops(self, player: Player, rift_level: int, item_chance: int) -> List[Tuple[str, int]]:
         dropped_items = []
         if random.randint(1, 100) > item_chance:
             return dropped_items
 
         drop_table = self.RIFT_DROP_TABLE.get(rift_level, self.RIFT_DROP_TABLE[min(self.RIFT_DROP_TABLE.keys())])
-        total_weight = sum(item["weight"] for item in drop_table)
+        total_weight = sum(item['weight'] for item in drop_table)
         roll = random.randint(1, total_weight)
 
         current_weight = 0
         for item in drop_table:
-            current_weight += item["weight"]
+            current_weight += item['weight']
             if roll <= current_weight:
-                dropped_items.append((item["name"], random.randint(item["min"], item["max"])))
+                dropped_items.append((item['name'], random.randint(item['min'], item['max'])))
                 break
 
         if rift_level >= 3 and random.randint(1, 100) <= 50:
             roll = random.randint(1, total_weight)
             current_weight = 0
             for item in drop_table:
-                current_weight += item["weight"]
+                current_weight += item['weight']
                 if roll <= current_weight:
-                    dropped_items.append((item["name"], random.randint(item["min"], item["max"])))
+                    dropped_items.append((item['name'], random.randint(item['min'], item['max'])))
                     break
 
         dropped_items.extend(self._roll_pill_drops(rift_level))
@@ -390,11 +379,11 @@ class RiftManager:
         if not drop_table:
             return []
 
-        total_weight = sum(item["weight"] for item in drop_table)
+        total_weight = sum(item['weight'] for item in drop_table)
         roll = random.randint(1, total_weight)
         current_weight = 0
         for item in drop_table:
-            current_weight += item["weight"]
+            current_weight += item['weight']
             if roll <= current_weight:
-                return [(item["name"], random.randint(item["min"], item["max"]))]
+                return [(item['name'], random.randint(item['min'], item['max']))]
         return []

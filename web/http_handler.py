@@ -14,6 +14,7 @@ class PluginWebPreviewHandler(SimpleHTTPRequestHandler):
     repo = None
     db_path: Path | None = None
     service_meta: dict[str, Any] = {}
+    auth_service = None
 
     def __init__(self, *args, directory=None, **kwargs):
         super().__init__(*args, directory=str(directory), **kwargs)
@@ -48,14 +49,81 @@ class PluginWebPreviewHandler(SimpleHTTPRequestHandler):
             return
 
         if parsed.path == "/api/status":
+            auth_status = self.auth_service.get_status() if self.auth_service else {}
             self._send_json(
                 {
                     "ok": True,
                     "mode": self.service_meta.get("mode", "plugin"),
                     "host": self.service_meta.get("host"),
                     "port": self.service_meta.get("port"),
+                    "auth_enabled": auth_status.get("enabled", False),
+                    "guest_access": auth_status.get("guest_access", True),
+                    "storage_ready": auth_status.get("storage_ready", False),
                 }
             )
+            return
+
+        if parsed.path == "/api/auth/status":
+            if self.auth_service:
+                self._send_json(self.auth_service.get_status())
+            else:
+                self._send_json(
+                    {
+                        "ok": True,
+                        "enabled": False,
+                        "guest_access": True,
+                        "mode": "disabled",
+                        "login_required": False,
+                        "binding_required": False,
+                        "writable_api_enabled": False,
+                        "storage_ready": False,
+                        "required_tables": [],
+                        "missing_tables": [],
+                        "message": "当前未挂载 Web 鉴权服务，保持游客只读模式。",
+                    }
+                )
+            return
+
+        if parsed.path == "/api/auth/bind-code":
+            params = parse_qs(parsed.query)
+            bind_code = (params.get("code") or [""])[0].strip()
+            if not bind_code:
+                self._send_json({"ok": False, "error": "缺少绑定码"}, status=HTTPStatus.BAD_REQUEST)
+                return
+            auth_service = self.auth_service
+            if not auth_service:
+                self._send_json({"ok": False, "error": "Web 鉴权服务未挂载"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+            payload = auth_service.inspect_bind_code(bind_code)
+            self._send_json(payload, status=HTTPStatus.OK if payload.get("ok") else HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+
+        if parsed.path == "/api/auth/login":
+            params = parse_qs(parsed.query)
+            bind_code = (params.get("code") or [""])[0].strip()
+            if not bind_code:
+                self._send_json({"ok": False, "error": "缺少绑定码"}, status=HTTPStatus.BAD_REQUEST)
+                return
+            auth_service = self.auth_service
+            if not auth_service:
+                self._send_json({"ok": False, "error": "Web 鉴权服务未挂载"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+            payload = auth_service.exchange_bind_code(bind_code)
+            self._send_json(payload, status=HTTPStatus.OK if payload.get("ok") else HTTPStatus.BAD_REQUEST)
+            return
+
+        if parsed.path == "/api/auth/session":
+            params = parse_qs(parsed.query)
+            token = (params.get("token") or [""])[0].strip()
+            if not token:
+                self._send_json({"ok": False, "error": "缺少 token"}, status=HTTPStatus.BAD_REQUEST)
+                return
+            auth_service = self.auth_service
+            if not auth_service:
+                self._send_json({"ok": False, "error": "Web 鉴权服务未挂载"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+            payload = auth_service.get_session(token)
+            self._send_json(payload, status=HTTPStatus.OK if payload.get("ok") else HTTPStatus.INTERNAL_SERVER_ERROR)
             return
 
         if parsed.path == "/api/players":
